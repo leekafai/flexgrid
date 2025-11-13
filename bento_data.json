@@ -1,0 +1,340 @@
+{
+    "id": "cls3zs60x04thpp01ofgr3ykz",
+    "handle": "leekafai",
+    "name": null,
+    "bio": null,
+    "bento": {
+        "items": [
+            {
+                "data": {
+                    "id": "8XpUKtrMxwMWRbnj",
+                    "href": "https://www.google.com/maps/@35.6764225,139.650027,15z",
+                    "type": "link",
+                    "style": {
+                        "mobile": "2x2",
+                        "desktop": "2x2"
+                    },
+                    "overrides": {
+                        "mapPlace": "Tokyo, Japan",
+                        "mapCaption": "Tokyo, Japan"
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 0
+                    },
+                    "desktop": {
+                        "x": 0,
+                        "y": 0
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "cJ7EEvqDBUPQOK1f",
+                    "type": "section-header",
+                    "title": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "text": "1234567",
+                                        "type": "text"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 4
+                    },
+                    "desktop": {
+                        "x": 0,
+                        "y": 4
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "c3mCW96lQf0259iO",
+                    "type": "section-header",
+                    "title": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 5
+                    },
+                    "desktop": {
+                        "x": 0,
+                        "y": 5
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "aVwUcO0yes2WQCNS",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2",
+                        "desktop": "2x2"
+                    },
+                    "halign": {
+                        "desktop": "left"
+                    },
+                    "valign": {
+                        "desktop": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph",
+                                "content": [
+                                    {
+                                        "text": "123123",
+                                        "type": "text"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 2
+                    },
+                    "desktop": {
+                        "x": 0,
+                        "y": 2
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "R8bDt4gBlDYAng3T",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 2,
+                        "y": 0
+                    },
+                    "desktop": {
+                        "x": 2,
+                        "y": 0
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "1dxOigtE0l9Ji1gl",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 2,
+                        "y": 2
+                    },
+                    "desktop": {
+                        "x": 2,
+                        "y": 2
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "WUOHO3n24xCAlxEb",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 6
+                    },
+                    "desktop": {
+                        "x": 0,
+                        "y": 6
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "Kfj5x6hEPjidgir8",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 2,
+                        "y": 6
+                    },
+                    "desktop": {
+                        "x": 2,
+                        "y": 6
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "XGaOBNYjWhMOqyXw",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 0,
+                        "y": 8
+                    },
+                    "desktop": {
+                        "x": 4,
+                        "y": 6
+                    }
+                }
+            },
+            {
+                "data": {
+                    "id": "PKJnTKZYJAhetn2K",
+                    "type": "rich-text",
+                    "style": {
+                        "mobile": "2x2"
+                    },
+                    "halign": {
+                        "mobile": "left"
+                    },
+                    "valign": {
+                        "mobile": "top"
+                    },
+                    "content": {
+                        "type": "doc",
+                        "content": [
+                            {
+                                "type": "paragraph"
+                            }
+                        ]
+                    }
+                },
+                "position": {
+                    "mobile": {
+                        "x": 2,
+                        "y": 9
+                    },
+                    "desktop": {
+                        "x": 6,
+                        "y": 6
+                    }
+                }
+            }
+        ],
+        "version": "v2"
+    },
+    "email": "leekafai@outlook.com",
+    "emailVerified": null,
+    "image": null,
+    "onboarded": true,
+    "inviteCodeId": "wetransferdad",
+    "admin": false,
+    "ogImage": null,
+    "createdAt": "2024-02-02T01:54:10.689Z",
+    "updatedAt": "2025-11-13T08:26:52.687Z",
+    "credentials": [
+        "credentials"
+    ]
+}
