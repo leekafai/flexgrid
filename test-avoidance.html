@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Avoidance Plugin Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        .test-area {
+            display: grid;
+            grid-template-columns: repeat(6, 100px);
+            gap: 10px;
+            padding: 20px;
+            background: white;
+            border-radius: 8px;
+            margin: 20px 0;
+            position: relative;
+            min-height: 400px;
+        }
+        .card {
+            background: #4CAF50;
+            border-radius: 4px;
+            padding: 10px;
+            color: white;
+            font-weight: bold;
+            cursor: move;
+            user-select: none;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.2s ease;
+        }
+        .card.small { grid-column: span 1; grid-row: span 1; }
+        .card.medium { grid-column: span 2; grid-row: span 1; }
+        .card.large { grid-column: span 1; grid-row: span 2; }
+        .card.wide { grid-column: span 2; grid-row: span 2; }
+        .card.dragging {
+            opacity: 0.7;
+            z-index: 1000;
+        }
+        .card.avoiding {
+            background: #FF9800;
+            transform: translate(var(--avoid-x, 0), var(--avoid-y, 0));
+        }
+        .shadow {
+            position: absolute;
+            background: rgba(33, 150, 243, 0.3);
+            border: 2px dashed #2196F3;
+            border-radius: 4px;
+            pointer-events: none;
+            z-index: 999;
+        }
+        .controls {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .log {
+            background: #f0f0f0;
+            padding: 10px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-size: 12px;
+            max-height: 200px;
+            overflow-y: auto;
+            margin-top: 10px;
+        }
+        .log-entry {
+            margin: 2px 0;
+            padding: 2px 4px;
+        }
+        .log-entry.error { background: #ffebee; color: #c62828; }
+        .log-entry.warn { background: #fff3e0; color: #ef6c00; }
+        .log-entry.info { background: #e3f2fd; color: #1565c0; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Avoidance Plugin Test</h1>
+        <p>拖动卡片来测试避让逻辑。观察当鼠标移动但阴影位置不变时，避让卡片是否仍然变化。</p>
+        
+        <div class="controls">
+            <button onclick="resetTest()">重置测试</button>
+            <button onclick="toggleDebug()">切换调试模式</button>
+            <label>
+                <input type="checkbox" id="showShadow" checked> 显示阴影
+            </label>
+            <label>
+                <input type="checkbox" id="lockPosition"> 锁定阴影位置
+            </label>
+        </div>
+
+        <div class="test-area" id="testArea">
+            <!-- 卡片将在这里动态生成 -->
+        </div>
+
+        <div class="log" id="log">
+            <div class="log-entry info">等待开始测试...</div>
+        </div>
+    </div>
+
+    <script>
+        // 简化的避让逻辑模拟
+        class AvoidanceSimulator {
+            constructor() {
+                this.cards = [];
+                this.shadowRect = null;
+                this.prevShadowRect = null;
+                this.activeAvoid = new Map();
+                this.debugMode = false;
+                this.lockedPosition = false;
+                this.draggedCard = null;
+                this.mousePosition = { x: 0, y: 0 };
+            }
+
+            log(message, type = 'info') {
+                const logEl = document.getElementById('log');
+                const entry = document.createElement('div');
+                entry.className = `log-entry ${type}`;
+                entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+                logEl.appendChild(entry);
+                logEl.scrollTop = logEl.scrollHeight;
+            }
+
+            initCards() {
+                const testArea = document.getElementById('testArea');
+                testArea.innerHTML = '';
+                
+                // 创建测试卡片
+                const cardData = [
+                    { id: 'card1', size: 'small', position: { x: 0, y: 0 }, text: 'Card 1' },
+                    { id: 'card2', size: 'medium', position: { x: 1, y: 0 }, text: 'Card 2' },
+                    { id: 'card3', size: 'large', position: { x: 3, y: 0 }, text: 'Card 3' },
+                    { id: 'card4', size: 'wide', position: { x: 0, y: 2 }, text: 'Card 4' },
+                    { id: 'card5', size: 'small', position: { x: 2, y: 2 }, text: 'Card 5' },
+                    { id: 'card6', size: 'medium', position: { x: 3, y: 3 }, text: 'Card 6' }
+                ];
+
+                this.cards = cardData;
+                
+                cardData.forEach(card => {
+                    const cardEl = document.createElement('div');
+                    cardEl.className = `card ${card.size}`;
+                    cardEl.id = card.id;
+                    cardEl.textContent = card.text;
+                    cardEl.style.gridColumnStart = card.position.x + 1;
+                    cardEl.style.gridRowStart = card.position.y + 1;
+                    
+                    cardEl.addEventListener('mousedown', (e) => this.startDrag(e, card));
+                    testArea.appendChild(cardEl);
+                });
+
+                this.log('初始化完成 - 6张测试卡片已创建');
+            }
+
+            startDrag(e, card) {
+                this.draggedCard = card;
+                const cardEl = document.getElementById(card.id);
+                cardEl.classList.add('dragging');
+                
+                this.updateShadowPosition(e);
+                
+                document.addEventListener('mousemove', this.handleMouseMove);
+                document.addEventListener('mouseup', this.handleMouseUp);
+                
+                this.log(`开始拖动: ${card.id}`, 'info');
+            }
+
+            handleMouseMove = (e) => {
+                if (!this.draggedCard) return;
+                
+                this.mousePosition = { x: e.clientX, y: e.clientY };
+                
+                if (!this.lockedPosition) {
+                    this.updateShadowPosition(e);
+                }
+                
+                // 模拟避让计算
+                this.simulateAvoidance();
+            }
+
+            handleMouseUp = () => {
+                if (!this.draggedCard) return;
+                
+                const cardEl = document.getElementById(this.draggedCard.id);
+                cardEl.classList.remove('dragging');
+                
+                document.removeEventListener('mousemove', this.handleMouseMove);
+                document.removeEventListener('mouseup', this.handleMouseUp);
+                
+                this.clearShadow();
+                this.clearAvoidances();
+                
+                this.log(`结束拖动: ${this.draggedCard.id}`, 'info');
+                this.draggedCard = null;
+            }
+
+            updateShadowPosition(e) {
+                const testArea = document.getElementById('testArea');
+                const rect = testArea.getBoundingClientRect();
+                
+                const cellSize = 100; // 100px + 10px gap
+                const x = Math.floor((e.clientX - rect.left) / cellSize);
+                const y = Math.floor((e.clientY - rect.top) / cellSize);
+                
+                this.prevShadowRect = this.shadowRect;
+                this.shadowRect = {
+                    left: x * cellSize,
+                    top: y * cellSize,
+                    width: 100, // 默认宽度
+                    height: 100, // 默认高度
+                    areaKey: `${x},${y},1,1`
+                };
+
+                this.renderShadow();
+                
+                if (this.debugMode) {
+                    const prevKey = this.prevShadowRect ? this.prevShadowRect.areaKey : 'none';
+                    const currKey = this.shadowRect.areaKey;
+                    
+                    if (prevKey !== currKey) {
+                        this.log(`阴影位置变化: ${prevKey} -> ${currKey}`, 'info');
+                    } else {
+                        this.log(`阴影位置未变: ${currKey} (但鼠标移动了)`, 'warn');
+                    }
+                }
+            }
+
+            renderShadow() {
+                this.clearShadow();
+                
+                if (!this.shadowRect || !document.getElementById('showShadow').checked) return;
+                
+                const testArea = document.getElementById('testArea');
+                const shadow = document.createElement('div');
+                shadow.className = 'shadow';
+                shadow.style.left = this.shadowRect.left + 'px';
+                shadow.style.top = this.shadowRect.top + 'px';
+                shadow.style.width = this.shadowRect.width + 'px';
+                shadow.style.height = this.shadowRect.height + 'px';
+                
+                testArea.appendChild(shadow);
+            }
+
+            clearShadow() {
+                const existing = document.querySelector('.shadow');
+                if (existing) {
+                    existing.remove();
+                }
+            }
+
+            simulateAvoidance() {
+                if (!this.shadowRect || !this.draggedCard) return;
+                
+                // 简化的碰撞检测
+                const shadowGridPos = {
+                    x: Math.floor(this.shadowRect.left / 110), // 100px + 10px gap
+                    y: Math.floor(this.shadowRect.top / 110),
+                    w: 1,
+                    h: 1
+                };
+
+                const collisions = [];
+                this.cards.forEach(card => {
+                    if (card.id === this.draggedCard.id) return;
+                    
+                    const cardUnits = this.getCardUnits(card.size);
+                    const cardRect = {
+                        x: card.position.x,
+                        y: card.position.y,
+                        w: cardUnits.w,
+                        h: cardUnits.h
+                    };
+                    
+                    if (this.aabbOverlap(shadowGridPos, cardRect)) {
+                        collisions.push(card);
+                    }
+                });
+
+                if (collisions.length === 0) {
+                    this.clearAvoidances();
+                    return;
+                }
+
+                // 检查是否需要重新计算避让
+                const prevAreaKey = this.prevShadowRect ? this.prevShadowRect.areaKey : null;
+                const currAreaKey = this.shadowRect.areaKey;
+                
+                if (prevAreaKey === currAreaKey && this.activeAvoid.size > 0) {
+                    if (this.debugMode) {
+                        this.log('阴影区域未变，跳过避让计算', 'info');
+                    }
+                    return;
+                }
+
+                // 模拟避让移动
+                collisions.forEach(card => {
+                    const avoidPosition = this.findAvoidPosition(card, shadowGridPos);
+                    if (avoidPosition) {
+                        this.applyAvoidance(card, avoidPosition);
+                    }
+                });
+
+                if (this.debugMode && collisions.length > 0) {
+                    this.log(`检测到碰撞，执行避让: ${collisions.map(c => c.id).join(', ')}`, 'warn');
+                }
+            }
+
+            getCardUnits(size) {
+                const map = {
+                    small: { w: 1, h: 1 },
+                    medium: { w: 2, h: 1 },
+                    large: { w: 1, h: 2 },
+                    wide: { w: 2, h: 2 }
+                };
+                return map[size] || { w: 2, h: 2 };
+            }
+
+            aabbOverlap(a, b) {
+                return !(
+                    a.x + a.w <= b.x ||
+                    b.x + b.w <= a.x ||
+                    a.y + a.h <= b.y ||
+                    b.y + b.h <= a.y
+                );
+            }
+
+            findAvoidPosition(card, shadowRect) {
+                // 简化的避让位置查找
+                const directions = [
+                    { x: 0, y: -1 }, // 上
+                    { x: 0, y: 1 },  // 下
+                    { x: -1, y: 0 }, // 左
+                    { x: 1, y: 0 }   // 右
+                ];
+
+                const cardUnits = this.getCardUnits(card.size);
+                
+                for (const dir of directions) {
+                    const newPos = {
+                        x: card.position.x + dir.x,
+                        y: card.position.y + dir.y
+                    };
+                    
+                    // 检查边界
+                    if (newPos.x < 0 || newPos.y < 0 || newPos.x + cardUnits.w > 6) continue;
+                    
+                    // 检查是否与其他卡片冲突
+                    const newRect = { x: newPos.x, y: newPos.y, w: cardUnits.w, h: cardUnits.h };
+                    let hasConflict = false;
+                    
+                    this.cards.forEach(otherCard => {
+                        if (otherCard.id === card.id || otherCard.id === this.draggedCard.id) return;
+                        
+                        const otherUnits = this.getCardUnits(otherCard.size);
+                        const otherRect = { x: otherCard.position.x, y: otherCard.position.y, w: otherUnits.w, h: otherUnits.h };
+                        
+                        if (this.aabbOverlap(newRect, otherRect)) {
+                            hasConflict = true;
+                        }
+                    });
+                    
+                    if (!hasConflict) {
+                        return newPos;
+                    }
+                }
+                
+                return null;
+            }
+
+            applyAvoidance(card, newPosition) {
+                const cardEl = document.getElementById(card.id);
+                const deltaX = (newPosition.x - card.position.x) * 110;
+                const deltaY = (newPosition.y - card.position.y) * 110;
+                
+                cardEl.style.setProperty('--avoid-x', deltaX + 'px');
+                cardEl.style.setProperty('--avoid-y', deltaY + 'px');
+                cardEl.classList.add('avoiding');
+                
+                this.activeAvoid.set(card.id, { newPosition });
+                
+                if (this.debugMode) {
+                    this.log(`卡片 ${card.id} 避让移动: (${card.position.x},${card.position.y}) -> (${newPosition.x},${newPosition.y})`, 'info');
+                }
+            }
+
+            clearAvoidances() {
+                document.querySelectorAll('.card.avoiding').forEach(cardEl => {
+                    cardEl.classList.remove('avoiding');
+                    cardEl.style.removeProperty('--avoid-x');
+                    cardEl.style.removeProperty('--avoid-y');
+                });
+                this.activeAvoid.clear();
+            }
+        }
+
+        // 初始化测试
+        const simulator = new AvoidanceSimulator();
+
+        function resetTest() {
+            simulator.initCards();
+            document.getElementById('log').innerHTML = '<div class="log-entry info">测试已重置</div>';
+        }
+
+        function toggleDebug() {
+            simulator.debugMode = !simulator.debugMode;
+            simulator.log(`调试模式: ${simulator.debugMode ? '开启' : '关闭'}`, 'info');
+        }
+
+        // 监听锁定位置选项
+        document.getElementById('lockPosition').addEventListener('change', (e) => {
+            simulator.lockedPosition = e.target.checked;
+            simulator.log(`位置锁定: ${simulator.lockedPosition ? '开启' : '关闭'}`, 'info');
+        });
+
+        // 启动测试
+        resetTest();
+    </script>
+</body>
+</html>

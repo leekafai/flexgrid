@@ -16,8 +16,9 @@
 
     <div class="test-grid-container">
       <BentoGrid ref="gridRef" storage-key="test-p-grid" layout="position">
-        <template #card="{ card }">
+        <template #card="{ card, index }">
           <div class="test-card-content">
+            <div class="badge">#{{ index + 1 }}</div>
             <h3>{{ card.title || card.type }}</h3>
             <p>坐标: ({{ card.position.x }}, {{ card.position.y }})，尺寸: {{ card.units?.w || '?' }}×{{ card.units?.h || '?' }}</p>
           </div>
@@ -82,6 +83,6 @@ const clearGrid = () => {
 .test-controls { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
 .btn { padding: 8px 16px; border: 1px solid #e5e7eb; border-radius: 8px; background: #fff; cursor: pointer; }
 .test-grid-container { max-width: 1200px; margin: 0 auto; }
-.test-card-content { padding: 24px; text-align: center; }
+.test-card-content { padding: 24px; text-align: center; position: relative; }
+.badge { position: absolute; top: 8px; left: 8px; font-size: 12px; padding: 2px 6px; border-radius: 8px; background: #eef2ff; color: #374151; }
 </style>
-
