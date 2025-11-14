@@ -157,10 +157,7 @@ export const useDragAndDrop = () => {
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
     
-    dragOffset.value = {
-      x: clientX,
-      y: clientY
-    };
+    pointerPos.value = { x: clientX, y: clientY };
     console.log('[DND] dnd.startDrag', { id: card.id, clientX, clientY });
     const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
     if (gridElement) {
@@ -177,6 +174,10 @@ export const useDragAndDrop = () => {
         const w = el.offsetWidth;
         const h = el.offsetHeight;
         dragSize.value = { width: w, height: h };
+        dragOffset.value = {
+          x: clientX - r.left,
+          y: clientY - r.top
+        };
         console.log('[DND] originRect', originRect.value);
       }
     }
@@ -428,11 +429,11 @@ export const useDragAndDrop = () => {
     })();
     const leftPx = (() => {
       if (isAnimating.value && animateTarget.value) return animateTarget.value.left;
-      return pointerPos.value.x - width / 2;
+      return pointerPos.value.x - dragOffset.value.x;
     })();
     const topPx = (() => {
       if (isAnimating.value && animateTarget.value) return animateTarget.value.top;
-      return pointerPos.value.y - height / 2;
+      return pointerPos.value.y - dragOffset.value.y;
     })();
     return {
       position: 'fixed' as const,
