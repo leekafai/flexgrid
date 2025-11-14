@@ -63,8 +63,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, useSlots, onMounted, onUnmounted } from 'vue';
-import type { BentoCard, CardSize } from '@/types/bento';
+import { ref, computed, useSlots} from 'vue';
+import type { BentoCard } from '@/types/bento';
 
 interface Props {
   card: BentoCard;
