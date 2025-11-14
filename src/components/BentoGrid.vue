@@ -22,7 +22,7 @@
         @remove="handleCardRemove"
         @drag-start="handleDragStart"
         class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 36, grid.gap)]"
+        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap)]"
         :data-id="card.id"
         :data-row-index="row.index"
         :data-card-index="cardIndex"
@@ -47,7 +47,7 @@
         @remove="handleCardRemove"
         @drag-start="handleDragStart"
         class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 36, grid.gap)]"
+        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap)]"
         :data-id="card.id"
       >
         <slot name="card" :card="card" />
@@ -58,15 +58,10 @@
     <div
       v-if="isDragging && dropRect"
       class="bento-grid__drop-target"
-      :style="getDropTargetStyles(grid.columns, grid.gap, grid.unit ?? 36)"
+      :style="getDropTargetStyles(grid.columns, grid.gap, grid.unit ?? 89)"
     />
     
-    <!-- 原始位置幽灵 -->
-    <div
-      v-if="isDragging && draggedCard"
-      class="bento-grid__origin-ghost"
-      :style="getOriginGhostStyles()"
-    />
+    
   </div>
 </template>
 
@@ -186,7 +181,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     console.log('[DND] Processing mouse move');
     
     // 使用新的基于行的拖拽更新
-    updateDrag(e, grid.value.columns, grid.value.gap, grid.value.unit ?? 36, grid.value.rows, gridEl.value!);
+    updateDrag(e, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
     
     // 扩展网格高度
     if (dropRect.value) {
@@ -218,7 +213,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     
     endDrag();
     if (layout.value === 'position' && draggedCard.value && dropRect.value && gridEl.value) {
-      const unit = grid.value.unit ?? 36;
+      const unit = grid.value.unit ?? 89;
       const gap = grid.value.gap;
       const cell = unit + gap;
       const gridX = Math.max(0, Math.floor(dropRect.value.left / cell));
@@ -282,7 +277,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
 const handleDragOver = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 36, grid.value.rows, gridEl.value!);
+  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
   if (dropRect.value) {
     const bottom = dropRect.value.top + dropRect.value.height;
     expandRowsForBottom(bottom);
@@ -293,7 +288,7 @@ const handleDragOver = (e: DragEvent) => {
 const handleDragEnter = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 36, grid.value.rows, gridEl.value!);
+  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
   console.log('[DND] grid dragenter', { draggedId: draggedCard.value?.id });
 };
 
@@ -316,7 +311,7 @@ const handleDrop = (e: DragEvent) => {
     saveLayout(props.storageKey);
   }
   if (layout.value === 'position' && dropRect.value && draggedCard.value && gridEl.value) {
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
     const gridX = Math.max(0, Math.floor(dropRect.value.left / cell));
@@ -344,7 +339,7 @@ onMounted(() => {
     const el = gridEl.value;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cols = Math.max(1, Math.floor((rect.width + gap) / (unit + gap)));
     grid.value.columns = cols;
@@ -420,7 +415,7 @@ onUnmounted(() => {
 
 .bento-grid__card:hover {
   transform: translateY(-1px);
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.06);
 }
 
 .bento-grid__drag-placeholder {

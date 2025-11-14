@@ -86,9 +86,9 @@ const emit = defineEmits<Emits>();
 const isHovered = ref(false);
 const isPressed = ref(false);
 const scale = ref(1);
-const shadow = ref(0.06);
+const shadow = ref(0.04);
 const targetScale = ref(1);
-const targetShadow = ref(0.06);
+const targetShadow = ref(0.04);
 let rafId: number | null = null;
 const contentVisible = ref(true);
 let io: IntersectionObserver | null = null;
@@ -116,7 +116,7 @@ const handleMouseDown = (event: MouseEvent) => {
   }
   isPressed.value = true;
   targetScale.value = 0.98;
-  targetShadow.value = 0.12;
+  targetShadow.value = 0.10;
   console.log('[DND] card mousedown', { id: props.card.id, interactive: props.card.interactive });
 };
 
@@ -126,15 +126,15 @@ const handleTouchStart = (event: TouchEvent) => {
   }
   isPressed.value = true;
   targetScale.value = 0.98;
-  targetShadow.value = 0.12;
+  targetShadow.value = 0.10;
   console.log('[DND] card touchstart', { id: props.card.id, interactive: props.card.interactive });
 };
 
 const handleMouseEnter = () => {
   isHovered.value = true;
   if (!isPressed.value) {
-    targetScale.value = props.hoverScale ?? 1.03;
-    targetShadow.value = props.shadowStrength ?? 0.12;
+    targetScale.value = props.hoverScale ?? 1.02;
+    targetShadow.value = props.shadowStrength ?? 0.10;
   }
 };
 
@@ -142,7 +142,7 @@ const handleMouseLeave = () => {
   isHovered.value = false;
   isPressed.value = false;
   targetScale.value = 1;
-  targetShadow.value = 0.06;
+  targetShadow.value = 0.04;
 };
 
 const handleUpdate = (updates: Partial<BentoCard>) => {
@@ -170,7 +170,7 @@ const cycleSize = () => {
   user-select: none;
   background: #ffffff;
   border-radius: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1), 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: none;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1;
 }
@@ -182,7 +182,7 @@ const cycleSize = () => {
 .bento-card--dragging {
   z-index: 1000;
   pointer-events: none;
-  opacity: 0.8;
+  opacity: 1;
 }
 
 .bento-card__content {

@@ -179,6 +179,12 @@ export const useDragAndDrop = () => {
           y: clientY - r.top
         };
         console.log('[DND] originRect', originRect.value);
+        dropRect.value = {
+          left: originRect.value.left,
+          top: originRect.value.top,
+          width: originRect.value.width,
+          height: originRect.value.height
+        };
       }
     }
   };
@@ -444,7 +450,7 @@ export const useDragAndDrop = () => {
       width: `${width}px`,
       height: `${height}px`,
       transform: 'none',
-      boxShadow: '0 12px 32px rgba(0, 0, 0, 0.15)',
+      boxShadow: '0 10px 28px rgba(0, 0, 0, 0.12)',
       transition: isAnimating.value ? 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none'
     };
   };

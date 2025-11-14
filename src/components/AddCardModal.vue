@@ -131,7 +131,7 @@ const cardSizes = [
 ];
 
 const selectedType = ref<CardType>('text');
-const selectedSize = ref<CardSize>('small');
+const selectedSize = ref<CardSize>('wide');
 
 const cardData = ref({
   title: '',

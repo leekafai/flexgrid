@@ -8,8 +8,8 @@ export const useBentoGrid = () => {
     cards: [],
     rows: [], // 新增：网格行数组
     columns: 12,
-    gap: 20,
-    unit: 36,
+    gap: 28,
+    unit: 89,
     maxWidth: '960px',
     theme: 'light',
     totalRows: 24,
@@ -135,14 +135,14 @@ export const useBentoGrid = () => {
 
   const getGridStyles = computed(() => {
     if (layout.value === 'grid') {
-      const unit = grid.value.unit ?? 36;
+      const unit = grid.value.unit ?? 89;
       const gapPx = grid.value.gap;
       const rows = grid.value.totalRows ?? 24;
       const height = rows * unit + Math.max(0, rows - 1) * gapPx;
       return {
         display: 'grid',
         gridTemplateColumns: `repeat(${grid.value.columns}, 1fr)`,
-        gridAutoRows: `${grid.value.unit ?? 36}px`,
+        gridAutoRows: `${grid.value.unit ?? 89}px`,
         gridAutoFlow: 'dense',
         gap: `${grid.value.gap}px`,
         justifyItems: 'stretch',
@@ -156,7 +156,7 @@ export const useBentoGrid = () => {
       } as const;
     }
     if (layout.value === 'position') {
-      const unit = grid.value.unit ?? 36;
+      const unit = grid.value.unit ?? 89;
       const gap = grid.value.gap;
       const toPx = (n: number) => n * (unit + gap);
       const maxY = grid.value.cards.reduce((m, c) => {
@@ -176,7 +176,7 @@ export const useBentoGrid = () => {
       } as const;
     }
     const gap = `${grid.value.gap}px`;
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const rows = grid.value.totalRows ?? 24;
     const height = rows * unit + Math.max(0, rows - 1) * grid.value.gap;
     return {
@@ -198,7 +198,7 @@ export const useBentoGrid = () => {
     const units = getCardUnits(card);
     
     if (layout.value === 'position') {
-      const unit = grid.value.unit ?? 36;
+      const unit = grid.value.unit ?? 89;
       const gap = grid.value.gap;
       const toPx = (n: number) => n * (unit + gap);
       const left = toPx(card.position?.x ?? 0);
@@ -258,7 +258,7 @@ export const useBentoGrid = () => {
       } as const;
     }
     
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const minWidth = units.w * unit + (units.w - 1) * gap;
     const minHeight = units.h * unit + (units.h - 1) * gap;
@@ -351,7 +351,7 @@ export const useBentoGrid = () => {
   };
 
   const setViewportGridBounds = (viewportEl?: HTMLElement | null) => {
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const vh = window.innerHeight || (viewportEl?.getBoundingClientRect().height ?? 800);
     const rows = Math.max(6, Math.floor(vh / (unit + gap)) + (grid.value.overscanRows ?? 2));
