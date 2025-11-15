@@ -8,6 +8,8 @@ export interface AvoidanceMove {
 export interface AvoidanceAnimation {
   cardId: string
   type: 'flip' | 'translate'
+  from?: { x: number; y: number }
+  to?: { x: number; y: number }
   duration: number
   easing: string
 }

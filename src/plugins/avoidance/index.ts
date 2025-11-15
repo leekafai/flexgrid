@@ -177,7 +177,7 @@ export const avoidancePlugin: AvoidancePlugin = {
     }
     const plan: AvoidancePlan = {
       moves: movesOut,
-      animations: movesOut.map(m => ({ cardId: m.cardId, type: 'vector', duration: 260, easing: 'cubic-bezier(.22,1,.36,1)', from: (this as any)._originals.get(m.cardId), to: m.toPosition }))
+      animations: movesOut.map(m => ({ cardId: m.cardId, type: 'translate', duration: 260, easing: 'cubic-bezier(.22,1,.36,1)', from: (this as any)._originals.get(m.cardId), to: m.toPosition }))
     }
     if (process.env.NODE_ENV === 'development') {
       console.log('[Avoidance] 生成移动计划:', plan.moves)
@@ -274,7 +274,7 @@ export const avoidancePlugin: AvoidancePlugin = {
     }
     const plan: AvoidancePlan = {
       moves: pendingRestores.length > 0 ? [...pendingRestores, ...movesAll] : movesAll,
-      animations: movesAll.map(m => ({ cardId: m.cardId, type: 'vector', duration: 240, easing: 'cubic-bezier(.22,1,.36,1)' }))
+      animations: movesAll.map(m => ({ cardId: m.cardId, type: 'translate', duration: 240, easing: 'cubic-bezier(.22,1,.36,1)', from: (this as any)._originals.get(m.cardId), to: m.toPosition }))
     }
     return plan
   },

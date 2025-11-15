@@ -22,7 +22,7 @@
         @remove="handleCardRemove"
         @drag-start="handleDragStart"
         class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap)]"
+        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap), getAnimStyles(card)]"
         :data-id="card.id"
         :data-row-index="row.index"
         :data-card-index="cardIndex"
@@ -47,7 +47,7 @@
         @remove="handleCardRemove"
         @drag-start="handleDragStart"
         class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap)]"
+        :style="[getCardStyles(card), getDragStyles(card, grid.unit ?? 89, grid.gap), getAnimStyles(card)]"
         :data-id="card.id"
       >
         <slot name="card" :card="card" :index="idx" />
@@ -117,6 +117,19 @@ const { getCardAnimationStyles, createIntersectionObserver } = useBentoAnimation
 
 const plugins = createPluginManager();
 plugins.register(avoidancePlugin);
+const animations = ref(new Map<string, { duration: number; easing: string }>());
+
+const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: number; easing: string; type: string }> } | null) => {
+  if (!plan || !plan.animations || plan.animations.length === 0) return;
+  for (const a of plan.animations) {
+    if (a.type === 'translate') {
+      animations.value.set(a.cardId, { duration: a.duration, easing: a.easing });
+      setTimeout(() => {
+        animations.value.delete(a.cardId);
+      }, a.duration + 50);
+    }
+  }
+};
 
 const lastShadow = ref<{ left: number; top: number; area: string } | null>(null);
 
@@ -131,6 +144,14 @@ const unitsOf = (card: BentoCardType) => {
   const map: Record<string, { w: number; h: number }> = { small: { w: 1, h: 1 }, medium: { w: 2, h: 1 }, large: { w: 1, h: 2 }, wide: { w: 2, h: 2 } };
   const size = (card.size as any) || 'wide';
   return map[size] || { w: 2, h: 2 };
+};
+
+const getAnimStyles = (card: BentoCardType) => {
+  if (layout.value !== 'position') return {} as any;
+  const anim = animations.value.get(card.id);
+  const base = 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)';
+  const transition = anim ? `left ${anim.duration}ms ${anim.easing}, top ${anim.duration}ms ${anim.easing}, ${base}` : base;
+  return { transition, willChange: 'left, top, transform' } as any;
 };
 
 const collidesAt = (card: BentoCardType, pos: { x: number; y: number }) => {
@@ -259,6 +280,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         cards: grid.value.cards
       } as any
       const plan = plugins.dispatch('onDragUpdate', ctx as any)
+      applyAnimations(plan as any)
       if (plan && plan.moves && plan.moves.length > 0) {
         if (process.env.NODE_ENV === 'development') {
           console.log('[Grid] 应用实时避让移动:', plan.moves)
@@ -309,6 +331,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         }
         lastShadow.value = { left: dropRect.value.left, top: dropRect.value.top, area: areaKey }
         const plan = plugins.dispatch('onDragUpdate', ctx as any)
+        applyAnimations(plan as any)
         if (plan && plan.moves && plan.moves.length > 0) {
           for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
         }
@@ -357,6 +380,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
           cards: grid.value.cards
         } as any
         const plan = plugins.dispatch('onBeforeDrop', ctx as any)
+        applyAnimations(plan as any)
         if (plan && plan.moves && plan.moves.length > 0) {
           for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
         }
@@ -389,6 +413,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
           cards: grid.value.cards
         } as any
         const plan2 = plugins.dispatch('onBeforeDrop', ctx as any)
+        applyAnimations(plan2 as any)
         if (plan2 && plan2.moves && plan2.moves.length > 0) {
           for (const mv of plan2.moves) moveCard(mv.cardId, mv.toPosition)
         }
@@ -489,6 +514,7 @@ const handleDragOver = (e: DragEvent) => {
       cards: grid.value.cards
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
+    applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[Grid] dragover 应用实时避让移动:', plan.moves)
@@ -534,6 +560,7 @@ const handleDragOver = (e: DragEvent) => {
       cards: grid.value.cards
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
+    applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
       if (process.env.NODE_ENV === 'development') {
         console.log('[Grid] dragenter 应用实时避让移动:', plan.moves)
@@ -614,6 +641,7 @@ const handleDragEnter = (e: DragEvent) => {
       cards: grid.value.cards
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
+    applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
       for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition);
     }
@@ -659,10 +687,11 @@ const handleDrop = (e: DragEvent) => {
         dropTarget: dropTarget.value,
         cards: grid.value.cards
       } as any
-      const plan = plugins.dispatch('onBeforeDrop', ctx as any)
-      if (plan && plan.moves && plan.moves.length > 0) {
-        for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
-      }
+    const plan = plugins.dispatch('onBeforeDrop', ctx as any)
+    applyAnimations(plan as any)
+    if (plan && plan.moves && plan.moves.length > 0) {
+      for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
+    }
       if (collidesAt(draggedCard.value, intended)) {
         const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
         dropRect.value = {
@@ -691,6 +720,7 @@ const handleDrop = (e: DragEvent) => {
     } as any
     if (!reverted) {
       const plan = plugins.dispatch('onBeforeDrop', ctx as any)
+      applyAnimations(plan as any)
       if (plan && plan.moves && plan.moves.length > 0) {
         for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
       }

@@ -11,16 +11,21 @@ export const createPluginManager = (): PluginManager => {
     },
     dispatch(hook: keyof AvoidancePlugin, ctx: AvoidanceContext): AvoidancePlan | null {
       let plan: AvoidancePlan | null = null
+      const animations: NonNullable<AvoidancePlan['animations']> = []
       for (const plugin of registry.values()) {
         const fn = plugin[hook]
         if (typeof fn === 'function') {
           const res = (fn as (ctx: AvoidanceContext) => AvoidancePlan | null).call(plugin as any, ctx)
-          if (res && res.moves && res.moves.length > 0) {
-            plan = res
-          }
+          if (res && res.animations && res.animations.length > 0) animations.push(...res.animations)
+          if (res && res.moves && res.moves.length > 0) plan = { moves: res.moves }
         }
       }
-      return plan
+      if (plan) {
+        if (animations.length > 0) plan.animations = animations
+        return plan
+      }
+      if (animations.length > 0) return { moves: [], animations }
+      return null
     }
   }
   return manager
