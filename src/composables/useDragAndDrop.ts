@@ -189,7 +189,7 @@ export const useDragAndDrop = () => {
     }
   };
 
-  const updateDrag = (event: MouseEvent | TouchEvent, columns: number, gap: number, unit: number, rows?: BentoGridRow[], gridElementArg?: HTMLElement) => {
+  const updateDrag = (event: MouseEvent | TouchEvent, columns: number, gap: number, unit: number, rows?: BentoGridRow[], gridElementArg?: HTMLElement, afterUpdate?: () => void) => {
     if (!draggedCard.value) return;
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
@@ -289,12 +289,19 @@ export const useDragAndDrop = () => {
           } else {
             const isPositionElse = gridElement.getAttribute('data-layout') === 'position';
             if (isPositionElse) {
-              const pos = getDropPosition(clientX, clientY, gridElement, columns, gap, unit);
+              const draggedDom = gridElement.querySelector(`.bento-grid__card[data-id="${draggedCard.value?.id}"]`) as HTMLElement | null;
+              const domRect = draggedDom ? draggedDom.getBoundingClientRect() : null;
+              const effX = (typeof clientX === 'number' && !Number.isNaN(clientX)) ? clientX : (domRect ? domRect.left + domRect.width / 2 : pointerPos.value.x);
+              const effY = (typeof clientY === 'number' && !Number.isNaN(clientY)) ? clientY : (domRect ? domRect.top + domRect.height / 2 : pointerPos.value.y);
+              const pos = getDropPosition(effX, effY, gridElement, columns, gap, unit);
               const units = getUnitsForCard(draggedCard.value!);
               const maxX = Math.max(0, columns - units.w);
               const gridX = Math.max(0, Math.min(pos.x, maxX));
               const gridY = Math.max(0, pos.y);
               const containerRect = gridElement.getBoundingClientRect();
+              if (process.env.NODE_ENV === 'development') {
+                console.log('[DND] position 阴影坐标->网格:', { effX, effY, gridX, gridY, units })
+              }
               dropRect.value = {
                 left: gridX * (unit + gap),
                 top: gridY * (unit + gap),
@@ -387,6 +394,7 @@ export const useDragAndDrop = () => {
             dropRect: dropRect.value,
             dragState: dragState.value 
           });
+          if (afterUpdate) afterUpdate();
         }
       });
     }
@@ -455,17 +463,19 @@ export const useDragAndDrop = () => {
     };
   };
 
-  const getDropTargetStyles = (columns: number, gap: number, unit: number) => {
+  const getDropTargetStyles = (columns: number, gap: number, unit: number, color?: string) => {
     if (!draggedCard.value || !dropRect.value) return {};
     console.log('[DND] dnd.dropTarget', { dropRect: dropRect.value });
+    const bg = color ?? 'rgba(0,0,0,0.1)';
+    const border = color ? '1px dashed rgba(255, 0, 0, 0.6)' : '1px dashed rgba(107, 114, 128, 0.5)';
     return {
       position: 'absolute',
       left: `${dropRect.value.left}px`,
       top: `${dropRect.value.top}px`,
       width: `${dropRect.value.width}px`,
       height: `${dropRect.value.height}px`,
-      backgroundColor: 'rgba(0,0,0,0.1)',
-      border: '1px dashed rgba(107, 114, 128, 0.5)',
+      backgroundColor: bg,
+      border,
       borderRadius: '12px',
       boxShadow: '0 6px 18px rgba(0,0,0,0.08)',
       pointerEvents: 'none',

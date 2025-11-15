@@ -1,7 +1,4 @@
 import { createRouter, createWebHistory } from 'vue-router'
-import HomePage from '@/pages/HomePage.vue'
-import TestPage from '@/pages/TestPage.vue'
-import TestFGrid from '@/pages/TestFGrid.vue'
 import TestPGrid from '@/pages/TestPGrid.vue'
 
 // 定义路由配置
@@ -9,17 +6,17 @@ const routes = [
   {
     path: '/',
     name: 'home',
-    component: HomePage,
+    component: TestPGrid,
   },
   {
     path: '/test',
     name: 'test',
-    component: TestPage,
+    component: TestPGrid,
   },
   {
     path: '/test-f-grid',
     name: 'test-f-grid',
-    component: TestFGrid,
+    component: TestPGrid,
   },
   {
     path: '/test-p-grid',
@@ -27,11 +24,14 @@ const routes = [
     component: TestPGrid,
   },
   {
+    path: '/home',
+    name: 'home-original',
+    component: TestPGrid,
+  },
+  {
     path: '/about',
     name: 'about',
-    component: {
-      template: '<div class="text-center text-xl p-8">About Page - Coming Soon</div>',
-    },
+    redirect: '/',
   },
 ]
 

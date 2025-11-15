@@ -41,16 +41,32 @@ export const buildOccupancy = (cards: BentoCard[], columns: number) => {
 }
 
 export const canPlace = (occ: number[][], columns: number, x: number, y: number, w: number, h: number) => {
-  if (x < 0 || y < 0 || x + w > columns) return false
+  if (x < 0 || y < 0 || x + w > columns) {
+    if (process.env.NODE_ENV === 'development' && (x >= 0 || y >= 0)) {
+      console.log(`[canPlace] 边界检查失败: x=${x}, y=${y}, w=${w}, h=${h}, columns=${columns}`)
+    }
+    return false
+  }
   for (let dy = 0; dy < h; dy++) {
     const row = occ[y + dy]
     if (!row) {
       // 行越界视为可扩展空行（允许向下探测）
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[canPlace] 行越界: y+dy=${y + dy}，视为可用`)
+      }
       continue
     }
     for (let dx = 0; dx < w; dx++) {
-      if (row[x + dx] === 1) return false
+      if (row[x + dx] === 1) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log(`[canPlace] 位置被占用: (${x + dx},${y + dy})`)
+        }
+        return false
+      }
     }
+  }
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[canPlace] 位置可用: (${x},${y},${w},${h})`)
   }
   return true
 }
@@ -70,9 +86,26 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
   q.push({ x: start.x, y: start.y })
   seen.add(`${start.x},${start.y}`)
   let steps = 0
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[bfsNearest] 开始搜索，起始位置 (${start.x},${start.y})，尺寸 ${size.w}x${size.h}，网格大小 ${columns}x${occ.length}`)
+  }
+  
   while (q.length && steps < limit) {
     const cur = q.shift()!
-    if (canPlace(occ, columns, cur.x, cur.y, size.w, size.h)) return cur
+    const canPlaceResult = canPlace(occ, columns, cur.x, cur.y, size.w, size.h)
+    
+    if (process.env.NODE_ENV === 'development' && steps < 10) {
+      console.log(`[bfsNearest] 检查位置 (${cur.x},${cur.y}): ${canPlaceResult}`)
+    }
+    
+    if (canPlaceResult) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log(`[bfsNearest] 找到可用位置 (${cur.x},${cur.y})，步数: ${steps}`)
+      }
+      return cur
+    }
+    
     const nexts = [
       { x: cur.x, y: cur.y - 1 },
       { x: cur.x, y: cur.y + 1 },
@@ -88,5 +121,10 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
     }
     steps++
   }
+  
+  if (process.env.NODE_ENV === 'development') {
+    console.log(`[bfsNearest] 未找到可用位置，搜索步数: ${steps}`)
+  }
+  
   return null
 }

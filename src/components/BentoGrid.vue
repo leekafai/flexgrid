@@ -58,7 +58,7 @@
     <div
       v-if="isDragging && dropRect"
       class="bento-grid__drop-target"
-      :style="getDropTargetStyles(grid.columns, grid.gap, grid.unit ?? 89)"
+        :style="getDropTargetStyles(grid.columns, grid.gap, grid.unit ?? 89, props.debugDropColor)"
     />
     
     
@@ -161,6 +161,7 @@ interface Props {
   virtualized?: boolean;
   layout?: 'flex' | 'grid' | 'position';
   storageKey?: string;
+  debugDropColor?: string;
 }
 
 const props = defineProps<Props>();
@@ -230,25 +231,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     console.log('[DND] Processing mouse move');
     
     // 使用新的基于行的拖拽更新
-    updateDrag(e, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
-    
-    // 扩展网格高度
-    if (dropRect.value) {
-      const bottom = dropRect.value.top + dropRect.value.height;
-      expandRowsForBottom(bottom);
-    }
-
-    if (layout.value === 'position' && gridEl.value && dropRect.value && draggedCard.value) {
-      const ctx = {
-        gridEl: gridEl.value,
-        columns: grid.value.columns,
-        gap: grid.value.gap,
-        unit: grid.value.unit ?? 89,
-        draggedCard: draggedCard.value,
-        dropRect: dropRect.value,
-        dropTarget: dropTarget.value,
-        cards: grid.value.cards
-      } as any
+    updateDrag(e, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
+      if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return
       const unit = grid.value.unit ?? 89
       const gap = grid.value.gap
       const cell = unit + gap
@@ -261,17 +245,74 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         const dx = Math.abs(dropRect.value.left - prev.left)
         const dy = Math.abs(dropRect.value.top - prev.top)
         const same = prev.area === areaKey
-        if (dx < 5 && dy < 5 && same) {
-          return
-        }
+        if (dx < 5 && dy < 5 && same) return
       }
       lastShadow.value = { left: dropRect.value.left, top: dropRect.value.top, area: areaKey }
+      const ctx = {
+        gridEl: gridEl.value,
+        columns: grid.value.columns,
+        gap: grid.value.gap,
+        unit: grid.value.unit ?? 89,
+        draggedCard: draggedCard.value,
+        dropRect: dropRect.value,
+        dropTarget: dropTarget.value,
+        cards: grid.value.cards
+      } as any
       const plan = plugins.dispatch('onDragUpdate', ctx as any)
       if (plan && plan.moves && plan.moves.length > 0) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Grid] 应用实时避让移动:', plan.moves)
+        }
         for (const mv of plan.moves) {
+          if (process.env.NODE_ENV === 'development') {
+            console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
+          }
           moveCard(mv.cardId, mv.toPosition)
         }
       }
+    });
+    
+    // 扩展网格高度
+    if (dropRect.value) {
+      const bottom = dropRect.value.top + dropRect.value.height;
+      expandRowsForBottom(bottom);
+    }
+
+    if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+      requestAnimationFrame(() => {
+        if (!dropRect.value) return
+        const ctx = {
+          gridEl: gridEl.value!,
+          columns: grid.value.columns,
+          gap: grid.value.gap,
+          unit: grid.value.unit ?? 89,
+          draggedCard: draggedCard.value!,
+          dropRect: dropRect.value!,
+          dropTarget: dropTarget.value,
+          cards: grid.value.cards
+        } as any
+        const unit = grid.value.unit ?? 89
+        const gap = grid.value.gap
+        const cell = unit + gap
+        const gridX = Math.max(0, Math.floor(dropRect.value.left / cell))
+        const gridY = Math.max(0, Math.floor(dropRect.value.top / cell))
+        const u = getCardUnits(draggedCard.value!)
+        const areaKey = `${gridX},${gridY},${u.w},${u.h}`
+        const prev = lastShadow.value
+        if (prev) {
+          const dx = Math.abs(dropRect.value.left - prev.left)
+          const dy = Math.abs(dropRect.value.top - prev.top)
+          const same = prev.area === areaKey
+          if (dx < 5 && dy < 5 && same) {
+            return
+          }
+        }
+        lastShadow.value = { left: dropRect.value.left, top: dropRect.value.top, area: areaKey }
+        const plan = plugins.dispatch('onDragUpdate', ctx as any)
+        if (plan && plan.moves && plan.moves.length > 0) {
+          for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
+        }
+      })
     }
     
     console.log('[DND] grid mousemove', { 
@@ -420,12 +461,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
 const handleDragOver = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
-  if (dropRect.value) {
-    const bottom = dropRect.value.top + dropRect.value.height;
-    expandRowsForBottom(bottom);
-  }
-  if (layout.value === 'position' && gridEl.value && dropRect.value && draggedCard.value) {
+  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
+    if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return;
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
@@ -453,8 +490,62 @@ const handleDragOver = (e: DragEvent) => {
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     if (plan && plan.moves && plan.moves.length > 0) {
-      for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Grid] dragover 应用实时避让移动:', plan.moves)
+      }
+      for (const mv of plan.moves) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
+        }
+        moveCard(mv.cardId, mv.toPosition);
+      }
     }
+  });
+  if (dropRect.value) {
+    const bottom = dropRect.value.top + dropRect.value.height;
+    expandRowsForBottom(bottom);
+  }
+  if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+    requestAnimationFrame(() => {
+      if (!dropRect.value) return
+    const unit = grid.value.unit ?? 89;
+    const gap = grid.value.gap;
+    const cell = unit + gap;
+    const gridX = Math.max(0, Math.floor(dropRect.value!.left / cell));
+    const gridY = Math.max(0, Math.floor(dropRect.value!.top / cell));
+    const u = getCardUnits(draggedCard.value);
+    const areaKey = `${gridX},${gridY},${u.w},${u.h}`;
+    const prev = lastShadow.value;
+    if (prev) {
+      const dx = Math.abs(dropRect.value!.left - prev.left);
+      const dy = Math.abs(dropRect.value!.top - prev.top);
+      const same = prev.area === areaKey;
+      if (dx < 5 && dy < 5 && same) return;
+    }
+    lastShadow.value = { left: dropRect.value!.left, top: dropRect.value!.top, area: areaKey };
+    const ctx = {
+      gridEl: gridEl.value,
+      columns: grid.value.columns,
+      gap: grid.value.gap,
+      unit: grid.value.unit ?? 89,
+      draggedCard: draggedCard.value!,
+      dropRect: dropRect.value!,
+      dropTarget: dropTarget.value,
+      cards: grid.value.cards
+    } as any;
+    const plan = plugins.dispatch('onDragUpdate', ctx as any);
+    if (plan && plan.moves && plan.moves.length > 0) {
+      if (process.env.NODE_ENV === 'development') {
+        console.log('[Grid] dragenter 应用实时避让移动:', plan.moves)
+      }
+      for (const mv of plan.moves) {
+        if (process.env.NODE_ENV === 'development') {
+          console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
+        }
+        moveCard(mv.cardId, mv.toPosition);
+      }
+    }
+    })
   }
   console.log('[DND] grid dragover', { draggedId: draggedCard.value?.id, dropIndex: dropIndex.value, dropRect: dropRect.value });
 };
@@ -462,8 +553,8 @@ const handleDragOver = (e: DragEvent) => {
 const handleDragEnter = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
-  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!);
-  if (layout.value === 'position' && gridEl.value && dropRect.value && draggedCard.value) {
+  updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
+    if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return;
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
@@ -493,6 +584,40 @@ const handleDragEnter = (e: DragEvent) => {
     if (plan && plan.moves && plan.moves.length > 0) {
       for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition);
     }
+  });
+  if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+    requestAnimationFrame(() => {
+      if (!dropRect.value) return
+    const unit = grid.value.unit ?? 89;
+    const gap = grid.value.gap;
+    const cell = unit + gap;
+    const gridX = Math.max(0, Math.floor(dropRect.value!.left / cell));
+    const gridY = Math.max(0, Math.floor(dropRect.value!.top / cell));
+    const u = getCardUnits(draggedCard.value);
+    const areaKey = `${gridX},${gridY},${u.w},${u.h}`;
+    const prev = lastShadow.value;
+    if (prev) {
+      const dx = Math.abs(dropRect.value!.left - prev.left);
+      const dy = Math.abs(dropRect.value!.top - prev.top);
+      const same = prev.area === areaKey;
+      if (dx < 5 && dy < 5 && same) return;
+    }
+    lastShadow.value = { left: dropRect.value!.left, top: dropRect.value!.top, area: areaKey };
+    const ctx = {
+      gridEl: gridEl.value,
+      columns: grid.value.columns,
+      gap: grid.value.gap,
+      unit: grid.value.unit ?? 89,
+      draggedCard: draggedCard.value!,
+      dropRect: dropRect.value!,
+      dropTarget: dropTarget.value,
+      cards: grid.value.cards
+    } as any;
+    const plan = plugins.dispatch('onDragUpdate', ctx as any);
+    if (plan && plan.moves && plan.moves.length > 0) {
+      for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition);
+    }
+    })
   }
   console.log('[DND] grid dragenter', { draggedId: draggedCard.value?.id });
 };

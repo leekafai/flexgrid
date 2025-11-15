@@ -8,6 +8,7 @@
     <div class="test-controls">
       <button @click="loadJson" class="btn">加载 bento_data.json</button>
       <button @click="clearGrid" class="btn">清空网格</button>
+      <button @click="toggleRed" class="btn">阴影标红</button>
     </div>
 
     <div class="test-info">
@@ -15,7 +16,7 @@
     </div>
 
     <div class="test-grid-container">
-      <BentoGrid ref="gridRef" storage-key="test-p-grid" layout="position">
+      <BentoGrid ref="gridRef" storage-key="test-p-grid" layout="position" :debug-drop-color="dropColor">
         <template #card="{ card, index }">
           <div class="test-card-content">
             <div class="badge">#{{ index + 1 }}</div>
@@ -29,7 +30,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import BentoGrid from '@/components/BentoGrid.vue';
 import { useBentoGrid } from '@/composables/useBentoGrid';
 import type { BentoCard } from '@/types/bento';
@@ -37,6 +38,7 @@ import bentoData from '../../bento_data.json';
 
 const gridRef = ref<InstanceType<typeof BentoGrid>>();
 const { grid } = useBentoGrid();
+const dropColor = ref<string | undefined>(undefined);
 
 const parseUnits = (style?: string) => {
   if (!style) return { w: 2, h: 2 };
@@ -74,6 +76,14 @@ const loadJson = () => {
 const clearGrid = () => {
   grid.value.cards = [];
   grid.value.rows = [];
+};
+
+onMounted(() => {
+  loadJson();
+});
+
+const toggleRed = () => {
+  dropColor.value = dropColor.value ? undefined : 'rgba(255,0,0,0.18)';
 };
 </script>
 
