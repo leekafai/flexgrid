@@ -43,8 +43,11 @@ export const useDragAndDrop = () => {
     unit: number
   ) => {
     const rect = gridElement.getBoundingClientRect();
-    const relativeX = clientX - rect.left;
-    const relativeY = clientY - rect.top;
+    const cs = getComputedStyle(gridElement);
+    const padLeft = parseFloat(cs.paddingLeft || '0') || 0;
+    const padTop = parseFloat(cs.paddingTop || '0') || 0;
+    const relativeX = Math.max(0, clientX - rect.left - padLeft);
+    const relativeY = Math.max(0, clientY - rect.top - padTop);
     
     const cellWidth = unit + gap;
     const cellHeight = unit + gap;
@@ -481,7 +484,7 @@ export const useDragAndDrop = () => {
       pointerEvents: 'none',
       zIndex: 999,
       opacity: 0.8,
-      transition: 'transform 0.1s ease, left 0.1s ease, top 0.1s ease'
+      transition: 'transform 0.1s ease, left 0.1s ease, top 0.1s ease, opacity 220ms ease'
     } as const;
   };
 
