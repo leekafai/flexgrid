@@ -277,6 +277,7 @@ interface Props {
   debugDropColor?: string;
   dropSpeed?: number;
   dropShadowFadeMs?: number;
+  avoidanceDelayMs?: number;
 }
 
 const props = defineProps<Props>();
@@ -373,7 +374,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         draggedCard: draggedCard.value,
         dropRect: dropRect.value,
         dropTarget: dropTarget.value,
-        cards: grid.value.cards
+        cards: grid.value.cards,
+        avoidanceDelayMs: props.avoidanceDelayMs ?? 100
       } as any
       const plan = plugins.dispatch('onDragUpdate', ctx as any)
       applyAnimations(plan as any)
@@ -547,7 +549,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
           draggedCard: draggedCard.value,
           dropRect: dropRect.value,
           dropTarget: dropTarget.value,
-          cards: grid.value.cards
+          cards: grid.value.cards,
+          avoidanceDelayMs: props.avoidanceDelayMs ?? 100
         } as any
         const plan2 = plugins.dispatch('onBeforeDrop', ctx as any)
         applyAnimations(plan2 as any)
@@ -656,7 +659,8 @@ const handleDragOver = (e: DragEvent) => {
       draggedCard: draggedCard.value,
       dropRect: dropRect.value,
       dropTarget: dropTarget.value,
-      cards: grid.value.cards
+      cards: grid.value.cards,
+      avoidanceDelayMs: props.avoidanceDelayMs ?? 100
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     applyAnimations(plan as any)
@@ -702,7 +706,8 @@ const handleDragOver = (e: DragEvent) => {
       draggedCard: draggedCard.value!,
       dropRect: dropRect.value!,
       dropTarget: dropTarget.value,
-      cards: grid.value.cards
+      cards: grid.value.cards,
+      avoidanceDelayMs: props.avoidanceDelayMs ?? 100
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     applyAnimations(plan as any)
@@ -750,7 +755,8 @@ const handleDragEnter = (e: DragEvent) => {
       draggedCard: draggedCard.value,
       dropRect: dropRect.value,
       dropTarget: dropTarget.value,
-      cards: grid.value.cards
+      cards: grid.value.cards,
+      avoidanceDelayMs: props.avoidanceDelayMs ?? 100
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     if (plan && plan.moves && plan.moves.length > 0) {
@@ -783,7 +789,8 @@ const handleDragEnter = (e: DragEvent) => {
       draggedCard: draggedCard.value!,
       dropRect: dropRect.value!,
       dropTarget: dropTarget.value,
-      cards: grid.value.cards
+      cards: grid.value.cards,
+      avoidanceDelayMs: props.avoidanceDelayMs ?? 100
     } as any;
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     applyAnimations(plan as any)

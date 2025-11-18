@@ -13,6 +13,7 @@ export const avoidancePlugin: AvoidancePlugin = {
   _reservations: new Map<string, { x: number; y: number; w: number; h: number }>() as any,
   _originals: new Map<string, { x: number; y: number }>() as any,
   _activeTargetId: '' as any,
+  _overlapStartTs: new Map<string, number>() as any,
   onDragStart(ctx: AvoidanceContext) {
     (this as any)._lastDispatchTs = 0
     ;(this as any)._lastMoves.clear()
@@ -23,6 +24,7 @@ export const avoidancePlugin: AvoidancePlugin = {
     ;(this as any)._reservations.clear()
     ;(this as any)._originals.clear()
     ;(this as any)._activeTargetId = ''
+    ;(this as any)._overlapStartTs.clear()
     return null as any
   },
   onDragUpdate(ctx: AvoidanceContext): AvoidancePlan | null {
@@ -67,6 +69,20 @@ export const avoidancePlugin: AvoidancePlugin = {
     (this as any)._prevShadowRect = { left: ctx.dropRect.left, top: ctx.dropRect.top, areaKey };
     ;(this as any)._prevCoveredIds = new Set(collisions.map(c => c.id))
 
+    const delayMs = Math.max(0, (ctx as any).avoidanceDelayMs ?? 100)
+    const overlapMap: Map<string, number> = (this as any)._overlapStartTs
+    const currentIds = new Set(collisions.map(c => c.id))
+    for (const id of currentIds) {
+      if (!overlapMap.has(id)) overlapMap.set(id, now)
+    }
+    for (const id of Array.from(overlapMap.keys())) {
+      if (!currentIds.has(id)) overlapMap.delete(id)
+    }
+    const stableCollisions = collisions.filter(c => {
+      const ts = overlapMap.get(c.id)
+      return ts !== undefined && now - ts >= delayMs
+    })
+
     let occ = buildOccupancy(ctx.cards.filter(c => c.id !== ctx.draggedCard.id), ctx.columns)
     for (const res of (this as any)._reservations.values()) {
       for (let dy = 0; dy < res.h; dy++) {
@@ -87,7 +103,7 @@ export const avoidancePlugin: AvoidancePlugin = {
         if (gx >= 0 && gx < ctx.columns) row[gx] = 1
       }
     }
-    if (collisions.length === 0) {
+    if (stableCollisions.length === 0) {
       // 无碰撞时保持当前避让快照，不进行恢复；跟随阴影更新区域键
       (this as any)._activeAreaKey = areaKey
       return null
@@ -110,7 +126,7 @@ export const avoidancePlugin: AvoidancePlugin = {
     // 多卡同时避让：对所有碰撞卡片尝试“邻近位置”避让（仅上下左右一格）
     const movesAll: AvoidanceMove[] = []
     // 覆盖优先：按交叠面积从大到小处理，保证最受影响的卡先让位
-    const order = collisions
+    const order = stableCollisions
       .map(c => {
         const u = getUnitsForCard(c)
         const rect = { x: c.position.x, y: c.position.y, w: u.w, h: u.h }
@@ -269,7 +285,7 @@ export const avoidancePlugin: AvoidancePlugin = {
     }
     ;(this as any)._activeAreaKey = areaKey
     for (const mv of movesAll) {
-      const movedCard = collisions.find(c => c.id === mv.cardId)!
+      const movedCard = stableCollisions.find(c => c.id === mv.cardId)!
       ;(this as any)._activeAvoid.set(mv.cardId, { orig: { x: movedCard.position.x, y: movedCard.position.y }, moved: { x: mv.toPosition.x, y: mv.toPosition.y }, areaKey })
     }
     const plan: AvoidancePlan = {
@@ -286,5 +302,6 @@ export const avoidancePlugin: AvoidancePlugin = {
     ;(this as any)._reservations.clear()
     ;(this as any)._originals.clear()
     ;(this as any)._activeTargetId = ''
+    ;(this as any)._overlapStartTs.clear()
   }
 }

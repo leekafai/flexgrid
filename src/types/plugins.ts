@@ -28,6 +28,7 @@ export interface AvoidanceContext {
   dropRect: { left: number; top: number; width: number; height: number }
   dropTarget: { x: number; y: number } | null
   cards: any[]
+  avoidanceDelayMs?: number
 }
 
 export interface AvoidancePlugin {
