@@ -19,8 +19,54 @@ export const useDragAndDrop = () => {
   const dragSize = ref<{ width: number; height: number } | null>(null);
   const originRect = ref<{ left: number; top: number; width: number; height: number } | null>(null);
   const animateTarget = ref<{ left: number; top: number } | null>(null);
+  const tilt = ref<{ x: number; y: number }>({ x: 0, y: 0 });
+  const lastPointer = ref<{ x: number; y: number } | null>(null);
+  const tiltZ = ref<number>(0);
+  const velX = ref<number>(0);
+  const velZ = ref<number>(0);
+  const lastUpdateTs = ref<number>(0);
+  let inertiaRAF: number | null = null;
+  let lastTickTs = 0;
   let rafScheduled = false;
   let lastEvent: { x: number; y: number } | null = null;
+  const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
+  const startInertia = () => {
+    if (inertiaRAF) return;
+    lastTickTs = performance.now();
+    const step = () => {
+      const now = performance.now();
+      const dt = Math.max(0.016, (now - lastTickTs) / 16.6667);
+      lastTickTs = now;
+      if (draggedCard.value) {
+        const idle = now - lastUpdateTs.value > 80;
+        if (idle) {
+          const k = 0.12;
+          const damping = 0.86;
+          // Z 旋转回弹
+          velZ.value += -k * tiltZ.value * dt;
+          velZ.value *= damping;
+          tiltZ.value += velZ.value;
+          // X 倾斜回弹
+          velX.value += -k * tilt.value.x * dt;
+          velX.value *= damping;
+          tilt.value = { x: tilt.value.x + velX.value, y: tilt.value.y };
+          if (
+            Math.abs(tiltZ.value) < 0.05 && Math.abs(velZ.value) < 0.05 &&
+            Math.abs(tilt.value.x) < 0.05 && Math.abs(velX.value) < 0.05
+          ) {
+            tiltZ.value = 0;
+            velZ.value = 0;
+            tilt.value = { x: 0, y: tilt.value.y };
+            velX.value = 0;
+          }
+        }
+        inertiaRAF = requestAnimationFrame(step);
+        return;
+      }
+      inertiaRAF = null;
+    };
+    inertiaRAF = requestAnimationFrame(step);
+  };
 
   const getUnitsForCard = (card: BentoCard) => {
     if (card.units) return card.units;
@@ -162,6 +208,8 @@ export const useDragAndDrop = () => {
     
     pointerPos.value = { x: clientX, y: clientY };
     console.log('[DND] dnd.startDrag', { id: card.id, clientX, clientY });
+    lastUpdateTs.value = performance.now();
+    startInertia();
     const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
     if (gridElement) {
       const el = gridElement.querySelector(`.bento-grid__card[data-id="${card.id}"]`) as HTMLElement | null;
@@ -202,7 +250,33 @@ export const useDragAndDrop = () => {
       requestAnimationFrame(() => {
         rafScheduled = false;
         if (!draggedCard.value || !lastEvent) return;
+        const prev = lastPointer.value || pointerPos.value;
+        const dx = lastEvent.x - prev.x;
+        const dy = lastEvent.y - prev.y;
+        lastPointer.value = { x: lastEvent.x, y: lastEvent.y };
         pointerPos.value = { x: lastEvent.x, y: lastEvent.y };
+        const targetTiltY = clamp(dx / 3, -16, 16);
+        const targetTiltX = clamp(dy / 2.2, -14, 14);
+        tilt.value = {
+          x: tilt.value.x * 0.75 + targetTiltX * 0.25,
+          y: tilt.value.y * 0.75 + targetTiltY * 0.25
+        };
+        const speed = Math.hypot(dx, dy);
+        const amp = clamp(speed / 2.2, 0, 16);
+        const angle = Math.atan2(dy, dx) * (180 / Math.PI);
+        const sector = Math.round(angle / 45);
+        const weight = sector === 0 ? 1
+          : sector === 1 ? 0.7
+          : sector === 2 ? 0
+          : sector === 3 ? -0.7
+          : sector === 4 || sector === -4 ? -1
+          : sector === -3 ? -0.7
+          : sector === -2 ? 0
+          : sector === -1 ? 0.7
+          : 0;
+        const targetTiltZ = clamp(weight * amp, -18, 18);
+        tiltZ.value = tiltZ.value * 0.72 + targetTiltZ * 0.28;
+        lastUpdateTs.value = performance.now();
         const gridElement = (gridElementArg || (document.querySelector('.bento-grid') as HTMLElement));
         if (gridElement) {
           const draggedSize = dragSize.value ?? (() => {
@@ -411,6 +485,13 @@ export const useDragAndDrop = () => {
       dropRect.value = null;
       dragState.value = null;
       animateTarget.value = null;
+      tilt.value = { x: 0, y: 0 };
+      lastPointer.value = null;
+      tiltZ.value = 0;
+      velZ.value = 0;
+      velX.value = 0;
+      lastUpdateTs.value = 0;
+      if (inertiaRAF) { cancelAnimationFrame(inertiaRAF); inertiaRAF = null; }
       return;
     }
     const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
@@ -430,6 +511,13 @@ export const useDragAndDrop = () => {
       dropRect.value = null;
       dragState.value = null;
       animateTarget.value = null;
+      tilt.value = { x: 0, y: 0 };
+      lastPointer.value = null;
+      tiltZ.value = 0;
+      velZ.value = 0;
+      velX.value = 0;
+      lastUpdateTs.value = 0;
+      if (inertiaRAF) { cancelAnimationFrame(inertiaRAF); inertiaRAF = null; }
     }, 300);
   };
 
@@ -455,6 +543,11 @@ export const useDragAndDrop = () => {
     const baseTrans = 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms cubic-bezier(.2,.8,.2,1)';
     const moveTrans = 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
     const lifting = !isAnimating.value;
+    const tX = tilt.value.x;
+    const tZ = tiltZ.value;
+    const transformStr = lifting ? `perspective(700px) translateZ(10px) rotateX(${tX}deg) rotate(${tZ}deg) scale(1.04)` : 'none';
+    const elev = lifting ? 22 + Math.min(18, Math.abs(tZ)) : 0;
+    const blur = lifting ? Math.round(elev * 2.4) : 0;
     return {
       position: 'fixed' as const,
       zIndex: 1000,
@@ -463,8 +556,8 @@ export const useDragAndDrop = () => {
       top: `${topPx}px`,
       width: `${width}px`,
       height: `${height}px`,
-      transform: lifting ? 'scale(1.03)' : 'none',
-      boxShadow: lifting ? '0 18px 40px rgba(15, 23, 42, 0.18)' : undefined,
+      transform: transformStr,
+      boxShadow: lifting ? `0 ${elev}px ${blur}px rgba(15, 23, 42, 0.18)` : undefined,
       transition: isAnimating.value ? moveTrans : baseTrans
     };
   };
