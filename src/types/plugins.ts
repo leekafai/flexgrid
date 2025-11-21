@@ -15,8 +15,10 @@ export interface AvoidanceAnimation {
 }
 
 export interface AvoidancePlan {
-  moves: AvoidanceMove[]
-  animations?: AvoidanceAnimation[]
+  moves: AvoidanceMove[];
+  animations?: AvoidanceAnimation[];
+  shadowPosition?: { left: number; top: number };
+  cancelDrop?: boolean;
 }
 
 export interface AvoidanceContext {

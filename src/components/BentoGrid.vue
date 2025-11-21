@@ -125,6 +125,7 @@ const animSuppressMove = ref(new Set<string>());
 const dropTargetVisible = ref(false);
 const dropShadowOpacity = ref(0);
 const dropShadowStyle = computed(() => ({ opacity: dropShadowOpacity.value })) as any;
+const overlapUnresolved = ref(false);
 
 const startLinePathDebug = (id: string, el: HTMLElement, ax: number, ay: number, bx: number, by: number, duration: number) => {
   const start = performance.now();
@@ -380,11 +381,11 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       const plan = plugins.dispatch('onDragUpdate', ctx as any)
       applyAnimations(plan as any)
       if (plan && plan.moves && plan.moves.length > 0) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('[Grid] 应用实时避让移动:', plan.moves)
         }
         for (const mv of plan.moves) {
-          if (process.env.NODE_ENV === 'development') {
+          if (import.meta.env.DEV) {
             console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
           }
           if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition)
@@ -477,7 +478,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       attachPlacementObserver(
         draggedCard.value.id,
         gridEl.value,
-        () => ({ x: draggedCard.value!.position.x, y: draggedCard.value!.position.y }),
+        () => draggedCard.value ? ({ x: draggedCard.value.position.x, y: draggedCard.value.position.y }) : null,
         () => dropRect.value ? { left: dropRect.value.left + gridEl.value!.getBoundingClientRect().left + paddingLeft, top: dropRect.value.top + gridEl.value!.getBoundingClientRect().top + paddingTop, width: dropRect.value.width, height: dropRect.value.height } : null,
         { unit: grid.value.unit ?? 89, gap: grid.value.gap, columns: grid.value.columns, paddingLeft, paddingTop, timeoutMs: 1600 }
       );
@@ -490,8 +491,24 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       const gridX = Math.max(0, Math.floor(dropRect.value.left / cell));
       const gridY = Math.max(0, Math.floor(dropRect.value.top / cell));
       const intended = { x: gridX, y: gridY };
+      const stillOverlap = overlapUnresolved.value || collidesAt(draggedCard.value, intended);
+      const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
+      if (stillOverlap && dropRect.value) {
+        dropRect.value = {
+          left: origin.x * (unit + gap),
+          top: origin.y * (unit + gap),
+          width: dropRect.value.width,
+          height: dropRect.value.height
+        } as any
+      }
+      console.log('[DDL]', {
+        origin,
+        shadow: { x: gridX, y: gridY },
+        unavoidableOverlap: stillOverlap
+      });
+      console.log('[PlaceDBG] mouseup', { overlap: stillOverlap, origin, shadow: { left: dropRect.value.left, top: dropRect.value.top, width: dropRect.value.width, height: dropRect.value.height } });
       let reverted = false;
-      if (collidesAt(draggedCard.value, intended)) {
+      if (overlapUnresolved.value || collidesAt(draggedCard.value, intended)) {
         const ctx = {
           gridEl: gridEl.value,
           columns: grid.value.columns,
@@ -507,7 +524,22 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         if (plan && plan.moves && plan.moves.length > 0) {
           for (const mv of plan.moves) { if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition) }
         }
-        if (collidesAt(draggedCard.value, intended)) {
+        
+        // 如果插件返回了 shadowPosition，说明无法避让，直接回到原始位置
+        if (plan && plan.shadowPosition) {
+          // 更新阴影位置到原始位置
+          dropRect.value = {
+            left: plan.shadowPosition.left,
+            top: plan.shadowPosition.top,
+            width: dropRect.value.width,
+            height: dropRect.value.height
+          }
+          // 直接移动卡片到原始位置，不再进行碰撞检测
+          const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
+          moveCard(draggedCard.value.id, origin)
+          reverted = true
+        } else if (collidesAt(draggedCard.value, intended)) {
+          // 只有在没有 shadowPosition 时才进行传统的碰撞检测
           const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
           applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: origin }] } as any)
           dropRect.value = {
@@ -576,7 +608,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     }
   
     // 使用新的基于行的放置逻辑
-    if (draggedCard.value && dragState.value) {
+    if (layout.value !== 'position' && draggedCard.value && dragState.value) {
       const { targetRowIndex, targetCardIndex } = dragState.value;
       
       console.log('[DND] Attempting to place card:', {
@@ -604,8 +636,6 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         dropShadowOpacity.value = 0;
         setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
       }
-    } else {
-      console.log('[DND] No valid drag state, card will return to original position');
     }
     
     console.log('[DND] grid mouseup completed', { 
@@ -665,11 +695,11 @@ const handleDragOver = (e: DragEvent) => {
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('[Grid] dragover 应用实时避让移动:', plan.moves)
       }
       for (const mv of plan.moves) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
         }
         if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition);
@@ -712,11 +742,11 @@ const handleDragOver = (e: DragEvent) => {
     const plan = plugins.dispatch('onDragUpdate', ctx as any);
     applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.DEV) {
         console.log('[Grid] dragenter 应用实时避让移动:', plan.moves)
       }
       for (const mv of plan.moves) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.DEV) {
           console.log('[Grid] moveCard()', mv.cardId, '->', mv.toPosition)
         }
         if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition);
@@ -810,7 +840,7 @@ const handleDrop = (e: DragEvent) => {
   }
   
   // 使用新的基于行的放置逻辑
-  if (dragState.value) {
+  if (layout.value !== 'position' && dragState.value) {
     const { targetRowIndex, targetCardIndex } = dragState.value;
     
     if (targetRowIndex !== undefined) {
@@ -836,7 +866,7 @@ const handleDrop = (e: DragEvent) => {
     const gridY = Math.max(0, Math.floor(dropRect.value.top / cell));
     const intended = { x: gridX, y: gridY };
     let reverted = false;
-    if (collidesAt(draggedCard.value, intended)) {
+    if (overlapUnresolved.value || collidesAt(draggedCard.value, intended)) {
       const ctx = {
         gridEl: gridEl.value,
         columns: grid.value.columns,
@@ -852,22 +882,37 @@ const handleDrop = (e: DragEvent) => {
     if (plan && plan.moves && plan.moves.length > 0) {
       for (const mv of plan.moves) { moveCard(mv.cardId, mv.toPosition) }
     }
-      if (collidesAt(draggedCard.value, intended)) {
-        const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
-        applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: origin }] } as any)
-        dropRect.value = {
-          left: origin.x * (unit + gap),
-          top: origin.y * (unit + gap),
-          width: dropRect.value.width,
-          height: dropRect.value.height
-        } as any
-        moveCard(draggedCard.value.id, origin)
-        reverted = true
-      } else {
-        const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
-        applyAnimations(planPlace as any)
-        moveCard(draggedCard.value.id, intended)
+    
+    // 如果插件返回了 shadowPosition，说明无法避让，直接回到原始位置
+    if (plan && plan.shadowPosition) {
+      // 更新阴影位置到原始位置
+      dropRect.value = {
+        left: plan.shadowPosition.left,
+        top: plan.shadowPosition.top,
+        width: dropRect.value.width,
+        height: dropRect.value.height
       }
+      // 直接移动卡片到原始位置，不再进行碰撞检测
+      const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
+      moveCard(draggedCard.value.id, origin)
+      reverted = true
+    } else if (collidesAt(draggedCard.value, intended)) {
+      // 只有在没有 shadowPosition 时才进行传统的碰撞检测
+      const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
+      applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: origin }] } as any)
+      dropRect.value = {
+        left: origin.x * (unit + gap),
+        top: origin.y * (unit + gap),
+        width: dropRect.value.width,
+        height: dropRect.value.height
+      } as any
+      moveCard(draggedCard.value.id, origin)
+      reverted = true
+    } else {
+      const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
+      applyAnimations(planPlace as any)
+      moveCard(draggedCard.value.id, intended)
+    }
     } else {
       const ctx = {
         gridEl: gridEl.value,
@@ -924,6 +969,7 @@ const handleDrop = (e: DragEvent) => {
     isDragging.value = false;
     draggedCard.value = null;
     dropTargetVisible.value = false;
+    overlapUnresolved.value = false;
   }, 300);
 };
 
@@ -1131,23 +1177,3 @@ onUnmounted(() => {
   }
 }
 </style>
-@keyframes bouncePlace {
-  0% { transform: translateY(0); }
-  50% { transform: translateY(-6px); }
-  100% { transform: translateY(0); }
-}
-
-.bento-bounce {
-  animation: bouncePlace 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-      const cs = getComputedStyle(gridEl.value)
-      const paddingLeft = parseFloat(cs.paddingLeft || '0') || 0
-      const paddingTop = parseFloat(cs.paddingTop || '0') || 0
-      const observer = attachPlacementObserver(
-        draggedCard.value.id,
-        gridEl.value,
-        () => ({ x: draggedCard.value!.position.x, y: draggedCard.value!.position.y }),
-        () => dropRect.value ? { left: dropRect.value.left + gridEl.value!.getBoundingClientRect().left + paddingLeft, top: dropRect.value.top + gridEl.value!.getBoundingClientRect().top + paddingTop, width: dropRect.value.width, height: dropRect.value.height } : null,
-        { unit: grid.value.unit ?? 89, gap: grid.value.gap, columns: grid.value.columns, paddingLeft, paddingTop, timeoutMs: 1200 }
-      )
-      // 调试观察器在超时后会自动 detach；这里不主动结束，保证采样覆盖动画全过程

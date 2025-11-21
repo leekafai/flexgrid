@@ -1,150 +1,163 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue';
-import type { BentoCard, AnimationType } from '@/types/bento';
+import { ref, type Ref } from 'vue';
+import type { BentoCard as BentoCardType } from '@/types/bento';
 
-export const useBentoAnimations = () => {
-  const visibleCards = ref<Set<string>>(new Set());
-  const animationQueue = ref<string[]>([]);
-
-  const animationConfigs: Record<AnimationType, any> = {
-    fade: {
-      initial: { opacity: 0, transform: 'translateY(20px)' },
-      animate: { opacity: 1, transform: 'translateY(0)' },
-      transition: 'opacity 0.6s ease, transform 0.6s ease'
-    },
-    slide: {
-      initial: { opacity: 0, transform: 'translateX(-30px)' },
-      animate: { opacity: 1, transform: 'translateX(0)' },
-      transition: 'opacity 0.5s ease, transform 0.5s ease'
-    },
-    scale: {
-      initial: { opacity: 0, transform: 'scale(0.8)' },
-      animate: { opacity: 1, transform: 'scale(1)' },
-      transition: 'opacity 0.4s ease, transform 0.4s ease'
-    },
-    bounce: {
-      initial: { opacity: 0, transform: 'scale(0.5)' },
-      animate: { opacity: 1, transform: 'scale(1)' },
-      transition: 'opacity 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55), transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55)'
-    }
+export interface AnimationPlan {
+  animations?: Array<{
+    cardId: string;
+    duration: number;
+    easing: string;
+    type: string;
+    from?: { x: number; y: number };
+    to?: { x: number; y: number };
+  }>;
+  moves?: Array<{
+    cardId: string;
+    toPosition: { x: number; y: number };
+  }>;
+  shadowPosition?: {
+    left: number;
+    top: number;
   };
+}
 
-  const observeCard = (cardId: string) => {
-    visibleCards.value.add(cardId);
-    if (!animationQueue.value.includes(cardId)) {
-      animationQueue.value.push(cardId);
-      processAnimationQueue();
-    }
-  };
+export interface AnimationState {
+  duration: number;
+  easing: string;
+}
 
-  const unobserveCard = (cardId: string) => {
-    visibleCards.value.delete(cardId);
-    const index = animationQueue.value.indexOf(cardId);
-    if (index > -1) {
-      animationQueue.value.splice(index, 1);
-    }
-  };
+export interface AnimationComposable {
+  // State
+  animations: Ref<Map<string, AnimationState>>;
+  animSuppressMove: Ref<Set<string>>;
+  
+  // Methods
+  getCardAnimationStyles: (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null, layout: string) => any;
+  createIntersectionObserver: (callback: (entries: IntersectionObserverEntry[]) => void) => IntersectionObserver;
+  applyAnimations: (plan: AnimationPlan | null, moveCard: (cardId: string, position: { x: number; y: number }) => void) => void;
+  startPathDebug: (id: string, el: HTMLElement, ax: number, ay: number, bx: number, by: number, duration: number) => void;
+}
 
-  const processAnimationQueue = () => {
-    if (animationQueue.value.length === 0) return;
+export function useBentoAnimations(): AnimationComposable {
+  const animations = ref(new Map<string, AnimationState>());
+  const animSuppressMove = ref(new Set<string>());
+
+  const getCardAnimationStyles = (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null, layout: string) => {
+    if (layout !== 'position') return {};
     
-    const cardId = animationQueue.value.shift();
-    if (cardId) {
-      // Simulate animation delay
-      setTimeout(() => {
-        // Animation completed
-      }, 100);
+    const anim = animations.value.get(card.id);
+    const base = 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)';
+    const isDragged = draggedCard && draggedCard.id === card.id;
+    
+    const transition = anim 
+      ? (isDragged 
+          ? `transform ${anim.duration}ms ${anim.easing}, box-shadow ${anim.duration}ms ${anim.easing}` 
+          : `left ${anim.duration}ms ${anim.easing}, top ${anim.duration}ms ${anim.easing}, ${base}`)
+      : base;
       
-      // Process next card in queue
-      setTimeout(processAnimationQueue, 150);
+    return { transition, willChange: 'left, top, transform' };
+  };
+
+  const createIntersectionObserver = (callback: (entries: IntersectionObserverEntry[]) => void) => {
+    return new IntersectionObserver(callback, {
+      threshold: 0.1,
+      rootMargin: '50px'
+    });
+  };
+
+  const applyAnimations = (plan: AnimationPlan | null, moveCard: (cardId: string, position: { x: number; y: number }) => void) => {
+    if (!plan || !plan.animations || plan.animations.length === 0) return;
+    
+    for (const a of plan.animations) {
+      if (a.type === 'translate') {
+        if (animations.value.has(a.cardId)) continue;
+        
+        // Handle translate animations
+        const el = document.querySelector(`.bento-grid__card[data-id="${a.cardId}"]`) as HTMLElement | null;
+        if (el && a.from && a.to) {
+          animations.value.set(a.cardId, { duration: a.duration, easing: a.easing });
+          animSuppressMove.value.add(a.cardId);
+          
+          el.style.transition = `transform ${a.duration}ms ${a.easing}`;
+          el.style.transform = 'translate(0px, 0px)';
+          el.style.willChange = 'transform';
+          
+          requestAnimationFrame(() => {
+            const dx = (a.to!.x - a.from.x) * 100;
+            const dy = (a.to!.y - a.from.y) * 100;
+            el.style.transform = `translate(${dx}px, ${dy}px)`;
+          });
+          
+          setTimeout(() => {
+            el.style.transition = '';
+            el.style.transform = '';
+            el.style.willChange = '';
+            animSuppressMove.value.delete(a.cardId);
+            animations.value.delete(a.cardId);
+            moveCard(a.cardId, a.to!);
+          }, a.duration + 20);
+          
+          // Add bounce effect
+          setTimeout(() => {
+            el.classList.add('bento-bounce');
+            setTimeout(() => { 
+              el.classList.remove('bento-bounce'); 
+            }, 180);
+          }, a.duration);
+        }
+      }
+    }
+    
+    // Handle moves
+    if (plan.moves && plan.moves.length > 0) {
+      for (const mv of plan.moves) {
+        if (!animSuppressMove.value.has(mv.cardId)) {
+          moveCard(mv.cardId, mv.toPosition);
+        }
+      }
     }
   };
 
-  const getCardAnimationStyles = (card: BentoCard) => {
-    const config = animationConfigs[card.animation || 'fade'];
-    const isVisible = visibleCards.value.has(card.id);
+  const startPathDebug = (id: string, el: HTMLElement, ax: number, ay: number, bx: number, by: number, duration: number) => {
+    const start = performance.now();
+    const dx = bx - ax;
+    const dy = by - ay;
+    let rafId = 0;
     
-    return {
-      ...config.initial,
-      ...(isVisible ? config.animate : {}),
-      transition: config.transition
-    };
-  };
-
-  const createIntersectionObserver = (cardId: string, element: HTMLElement) => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((entry) => {
-          if (entry.isIntersecting) {
-            observeCard(cardId);
-          } else {
-            unobserveCard(cardId);
-          }
-        });
-      },
-      {
-        threshold: 0.1,
-        rootMargin: '50px'
+    const poll = () => {
+      const t = Math.max(0, Math.min(1, (performance.now() - start) / duration));
+      const ex = ax + dx * t;
+      const ey = ay + dy * t;
+      const r = el.getBoundingClientRect();
+      const cx = r.left + r.width / 2;
+      const cy = r.top + r.height / 2;
+      const dev = Math.hypot(cx - ex, cy - ey);
+      
+      if (dev > 4) {
+        try { 
+          console.warn('[PathDBG]', JSON.stringify({ 
+            id, t, expected: { x: ex, y: ey }, 
+            actual: { x: cx, y: cy }, deviation: dev 
+          })) 
+        } catch {}
       }
-    );
-
-    observer.observe(element);
-    return observer;
-  };
-
-  const createHoverAnimation = (element: HTMLElement, card: BentoCard) => {
-    let isHovered = false;
+      
+      if (t < 1) { 
+        rafId = requestAnimationFrame(poll);
+      }
+    };
     
-    const handleMouseEnter = () => {
-      isHovered = true;
-      element.style.transform = 'translateY(-4px) scale(1.02)';
-      element.style.boxShadow = '0 12px 40px rgba(0, 0, 0, 0.15)';
-    };
-
-    const handleMouseLeave = () => {
-      isHovered = false;
-      element.style.transform = 'translateY(0) scale(1)';
-      element.style.boxShadow = '0 4px 16px rgba(0, 0, 0, 0.08)';
-    };
-
-    element.addEventListener('mouseenter', handleMouseEnter);
-    element.addEventListener('mouseleave', handleMouseLeave);
-
-    return () => {
-      element.removeEventListener('mouseenter', handleMouseEnter);
-      element.removeEventListener('mouseleave', handleMouseLeave);
-    };
-  };
-
-  const createClickAnimation = (element: HTMLElement) => {
-    const handleMouseDown = () => {
-      element.style.transform = 'scale(0.95)';
-      element.style.transition = 'transform 0.1s ease';
-    };
-
-    const handleMouseUp = () => {
-      element.style.transform = 'scale(1)';
-      element.style.transition = 'transform 0.2s ease';
-    };
-
-    element.addEventListener('mousedown', handleMouseDown);
-    element.addEventListener('mouseup', handleMouseUp);
-    element.addEventListener('mouseleave', handleMouseUp);
-
-    return () => {
-      element.removeEventListener('mousedown', handleMouseDown);
-      element.removeEventListener('mouseup', handleMouseUp);
-      element.removeEventListener('mouseleave', handleMouseUp);
-    };
+    rafId = requestAnimationFrame(poll);
+    setTimeout(() => { 
+      if (rafId) cancelAnimationFrame(rafId);
+    }, duration + 50);
   };
 
   return {
-    visibleCards,
-    animationQueue,
+    animations,
+    animSuppressMove,
     getCardAnimationStyles,
     createIntersectionObserver,
-    createHoverAnimation,
-    createClickAnimation,
-    observeCard,
-    unobserveCard
+    applyAnimations,
+    startPathDebug
   };
-};
+}

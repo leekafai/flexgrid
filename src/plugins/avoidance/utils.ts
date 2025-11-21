@@ -42,7 +42,7 @@ export const buildOccupancy = (cards: BentoCard[], columns: number) => {
 
 export const canPlace = (occ: number[][], columns: number, x: number, y: number, w: number, h: number) => {
   if (x < 0 || y < 0 || x + w > columns) {
-    if (process.env.NODE_ENV === 'development' && (x >= 0 || y >= 0)) {
+    if (import.meta.env.MODE === 'development' && (x >= 0 || y >= 0)) {
       console.log(`[canPlace] 边界检查失败: x=${x}, y=${y}, w=${w}, h=${h}, columns=${columns}`)
     }
     return false
@@ -51,21 +51,21 @@ export const canPlace = (occ: number[][], columns: number, x: number, y: number,
     const row = occ[y + dy]
     if (!row) {
       // 行越界视为可扩展空行（允许向下探测）
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.log(`[canPlace] 行越界: y+dy=${y + dy}，视为可用`)
       }
       continue
     }
     for (let dx = 0; dx < w; dx++) {
       if (row[x + dx] === 1) {
-        if (process.env.NODE_ENV === 'development') {
+        if (import.meta.env.MODE === 'development') {
           console.log(`[canPlace] 位置被占用: (${x + dx},${y + dy})`)
         }
         return false
       }
     }
   }
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.MODE === 'development') {
     console.log(`[canPlace] 位置可用: (${x},${y},${w},${h})`)
   }
   return true
@@ -87,7 +87,7 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
   seen.add(`${start.x},${start.y}`)
   let steps = 0
   
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.MODE === 'development') {
     console.log(`[bfsNearest] 开始搜索，起始位置 (${start.x},${start.y})，尺寸 ${size.w}x${size.h}，网格大小 ${columns}x${occ.length}`)
   }
   
@@ -95,12 +95,12 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
     const cur = q.shift()!
     const canPlaceResult = canPlace(occ, columns, cur.x, cur.y, size.w, size.h)
     
-    if (process.env.NODE_ENV === 'development' && steps < 10) {
+    if (import.meta.env.MODE === 'development' && steps < 10) {
       console.log(`[bfsNearest] 检查位置 (${cur.x},${cur.y}): ${canPlaceResult}`)
     }
     
     if (canPlaceResult) {
-      if (process.env.NODE_ENV === 'development') {
+      if (import.meta.env.MODE === 'development') {
         console.log(`[bfsNearest] 找到可用位置 (${cur.x},${cur.y})，步数: ${steps}`)
       }
       return cur
@@ -114,7 +114,7 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
     ]
     for (const n of nexts) {
       const key = `${n.x},${n.y}`
-      if (!seen.has(key) && n.x >= 0 && n.x < columns && n.y >= 0 && n.y < occ.length + 8) {
+      if (!seen.has(key) && (n.x >= 0 && n.x < columns && n.y >= 0 && n.y < occ.length + 8)) {
         seen.add(key)
         q.push(n)
       }
@@ -122,7 +122,7 @@ export const bfsNearest = (occ: number[][], columns: number, start: { x: number;
     steps++
   }
   
-  if (process.env.NODE_ENV === 'development') {
+  if (import.meta.env.MODE === 'development') {
     console.log(`[bfsNearest] 未找到可用位置，搜索步数: ${steps}`)
   }
   

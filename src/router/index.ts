@@ -38,7 +38,7 @@ const routes = [
 // 创建路由实例
 const router = createRouter({
   history: createWebHistory(),
-  routes,
+  routes: routes as readonly any[],
 })
 
 export default router

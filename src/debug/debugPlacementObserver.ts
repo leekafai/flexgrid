@@ -53,7 +53,7 @@ export const attachPlacementObserver = (
             transition: cs.transition
           },
           rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-          model: getModelPos(),
+          model: getModelPos?.() || null,
           shadow: getShadowRect()
         })
       }
@@ -71,7 +71,7 @@ export const attachPlacementObserver = (
       ts: now(),
       style: { left: cs.left, top: cs.top, transform: cs.transform, position: cs.position, zIndex: cs.zIndex, transition: cs.transition },
       rect: { left: rect.left, top: rect.top, width: rect.width, height: rect.height },
-      model: getModelPos(),
+      model: getModelPos?.() || null,
       shadow: getShadowRect()
     })
     rafId = requestAnimationFrame(poll)
