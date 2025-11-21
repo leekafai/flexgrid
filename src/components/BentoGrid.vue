@@ -124,7 +124,22 @@ const animations = ref(new Map<string, { duration: number; easing: string }>());
 const animSuppressMove = ref(new Set<string>());
 const dropTargetVisible = ref(false);
 const dropShadowOpacity = ref(0);
-const dropShadowStyle = computed(() => ({ opacity: dropShadowOpacity.value })) as any;
+const dropShadowDropping = ref(false);
+const dropShadowStyle = computed(() => {
+  const ms = props.dropShadowFadeMs ?? 220;
+  const s: CSSProperties = { opacity: dropShadowOpacity.value } as any;
+  if (dropShadowDropping.value) {
+    (s as any).transform = 'scale(0.96)';
+    (s as any).transition = `transform ${ms}ms cubic-bezier(.2,.8,.2,1), opacity ${ms}ms cubic-bezier(.2,.8,.2,1)`;
+    (s as any).animation = 'none';
+    (s as any).boxShadow = '0 8px 24px rgba(0,0,0,0.10)';
+  } else {
+    (s as any).transform = 'scale(1)';
+    (s as any).transition = 'transform 100ms ease, opacity 100ms ease';
+    (s as any).animation = 'dropTargetPulse 1s infinite';
+  }
+  return s as any;
+}) as any;
 const overlapUnresolved = ref(false);
 
 const pathSamples = new Map<string, Array<{ t: number; expected: { x: number; y: number }; actual: { x: number; y: number }; deviation: number; lineDist: number; tProj: number; onLine: boolean }>>();
@@ -194,14 +209,16 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
             const distance = Math.hypot(dx, dy);
             const v = (props.dropSpeed ?? 1200);
             const duration = Math.max(0, Math.round((distance / v) * 1000));
-            animations.value.set(a.cardId, { duration, easing: 'linear' });
+            animations.value.set(a.cardId, { duration, easing: 'cubic-bezier(.2,.8,.2,1)' });
             el.style.transition = 'none';
-            el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+            el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.03)`;
+            el.style.boxShadow = '0 18px 40px rgba(15, 23, 42, 0.18)';
             el.style.willChange = 'transform';
             el.style.pointerEvents = 'none';
             requestAnimationFrame(() => {
-              el.style.transition = `transform ${duration}ms linear`;
-              el.style.transform = 'translate3d(0, 0, 0)';
+              el.style.transition = `transform ${duration}ms cubic-bezier(.2,.8,.2,1), box-shadow ${duration}ms cubic-bezier(.2,.8,.2,1)`;
+              el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
+              el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
             });
             const ax = first.left + first.width / 2;
             const ay = first.top + first.height / 2;
@@ -211,6 +228,7 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
             setTimeout(() => {
               el.style.transition = '';
               el.style.transform = '';
+              el.style.boxShadow = '';
               el.style.willChange = '';
               el.style.pointerEvents = '';
               animSuppressMove.value.delete(a.cardId);
@@ -330,6 +348,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
   dragOriginPos.value = { x: card.position.x, y: card.position.y };
   dropTargetVisible.value = true;
   dropShadowOpacity.value = 0.8;
+  dropShadowDropping.value = false;
   
   if (!isDragging.value) {
     console.error('[DND] Failed to start drag - isDragging is false');
@@ -473,8 +492,9 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       hasPlacedOnce.value = true;
       console.log('[Place] endDrag suppressed overlay, proceeding with grid animation');
       if (dropTargetVisible.value) {
+        dropShadowDropping.value = true;
         dropShadowOpacity.value = 0;
-        setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
+        setTimeout(() => { dropTargetVisible.value = false; dropShadowDropping.value = false; }, props.dropShadowFadeMs ?? 220);
       }
       // 由 transform 动画接管，避免在此触发固定层 left/top 过渡
       setTimeout(() => {
@@ -640,8 +660,9 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         cards: grid.value.cards
       } as any)
       if (dropTargetVisible.value) {
+        dropShadowDropping.value = true;
         dropShadowOpacity.value = 0;
-        setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
+        setTimeout(() => { dropTargetVisible.value = false; dropShadowDropping.value = false; }, props.dropShadowFadeMs ?? 220);
       }
     }
   
@@ -671,8 +692,9 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       
       saveLayout(props.storageKey);
       if (dropTargetVisible.value) {
+        dropShadowDropping.value = true;
         dropShadowOpacity.value = 0;
-        setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
+        setTimeout(() => { dropTargetVisible.value = false; dropShadowDropping.value = false; }, props.dropShadowFadeMs ?? 220);
       }
     }
     
@@ -1002,6 +1024,7 @@ const handleDrop = (e: DragEvent) => {
     isDragging.value = false;
     draggedCard.value = null;
     dropTargetVisible.value = false;
+    dropShadowDropping.value = false;
     overlapUnresolved.value = false;
   }, 300);
 };

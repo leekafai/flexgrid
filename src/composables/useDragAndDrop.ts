@@ -452,6 +452,9 @@ export const useDragAndDrop = () => {
       if (isAnimating.value && animateTarget.value) return animateTarget.value.top;
       return pointerPos.value.y - dragOffset.value.y;
     })();
+    const baseTrans = 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms cubic-bezier(.2,.8,.2,1)';
+    const moveTrans = 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
+    const lifting = !isAnimating.value;
     return {
       position: 'fixed' as const,
       zIndex: 1000,
@@ -460,9 +463,9 @@ export const useDragAndDrop = () => {
       top: `${topPx}px`,
       width: `${width}px`,
       height: `${height}px`,
-      transform: 'none',
-      boxShadow: '0 10px 28px rgba(0, 0, 0, 0.12)',
-      transition: isAnimating.value ? 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1)' : 'none'
+      transform: lifting ? 'scale(1.03)' : 'none',
+      boxShadow: lifting ? '0 18px 40px rgba(15, 23, 42, 0.18)' : undefined,
+      transition: isAnimating.value ? moveTrans : baseTrans
     };
   };
 
