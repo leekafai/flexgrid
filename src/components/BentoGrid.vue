@@ -451,6 +451,11 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       console.log('[Place] skip duplicate mouseup');
       return;
     }
+    isDragging.value = false;
+    document.removeEventListener('mousemove', handleMouseMove);
+    document.removeEventListener('mouseup', handleMouseUp);
+    document.removeEventListener('touchmove', handleMouseMove);
+    document.removeEventListener('touchend', handleMouseUp);
     
     if (!draggedCard.value) {
       console.log('[DND] No dragged card, cleaning up');
@@ -462,7 +467,6 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       }
       endDrag();
       setTimeout(() => {
-        isDragging.value = false;
         draggedCard.value = null;
         placeholderStyles.value = {};
       }, 300);
@@ -643,13 +647,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       dragState: dragState.value 
     });
     setTimeout(() => {
-      isDragging.value = false;
       draggedCard.value = null;
       placeholderStyles.value = {};
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.removeEventListener('touchmove', handleMouseMove);
-      document.removeEventListener('touchend', handleMouseUp);
     }, 300);
   };
   
