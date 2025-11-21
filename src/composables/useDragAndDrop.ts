@@ -518,7 +518,7 @@ export const useDragAndDrop = () => {
       velX.value = 0;
       lastUpdateTs.value = 0;
       if (inertiaRAF) { cancelAnimationFrame(inertiaRAF); inertiaRAF = null; }
-    }, 300);
+    }, 480);
   };
 
   const getDragStyles = (card: BentoCard, unit: number, gap: number) => {
@@ -541,11 +541,11 @@ export const useDragAndDrop = () => {
       return pointerPos.value.y - dragOffset.value.y;
     })();
     const baseTrans = 'transform 180ms cubic-bezier(.2,.8,.2,1), box-shadow 180ms cubic-bezier(.2,.8,.2,1)';
-    const moveTrans = 'left 0.28s cubic-bezier(0.22, 1, 0.36, 1), top 0.28s cubic-bezier(0.22, 1, 0.36, 1)';
+    const moveTrans = 'left 0.45s cubic-bezier(0.2, 0.9, 0.3, 1), top 0.45s cubic-bezier(0.2, 0.9, 0.3, 1), transform 0.45s cubic-bezier(0.2, 0.9, 0.3, 1)';
     const lifting = !isAnimating.value;
     const tX = tilt.value.x;
     const tZ = tiltZ.value;
-    const transformStr = lifting ? `perspective(700px) translateZ(10px) rotateX(${tX}deg) rotate(${tZ}deg) scale(1.04)` : 'none';
+    const transformStr = lifting ? `perspective(700px) translateZ(10px) rotateX(${tX}deg) rotate(${tZ}deg) scale(1.04)` : 'scale(1.01)';
     const elev = lifting ? 22 + Math.min(18, Math.abs(tZ)) : 0;
     const blur = lifting ? Math.round(elev * 2.4) : 0;
     return {
