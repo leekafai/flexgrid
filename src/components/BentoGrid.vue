@@ -127,6 +127,7 @@ const dropShadowOpacity = ref(0);
 const dropShadowStyle = computed(() => ({ opacity: dropShadowOpacity.value })) as any;
 const overlapUnresolved = ref(false);
 
+const pathSamples = new Map<string, Array<{ t: number; expected: { x: number; y: number }; actual: { x: number; y: number }; deviation: number; lineDist: number; tProj: number; onLine: boolean }>>();
 const startLinePathDebug = (id: string, el: HTMLElement, ax: number, ay: number, bx: number, by: number, duration: number) => {
   const start = performance.now();
   const dx = bx - ax;
@@ -140,13 +141,29 @@ const startLinePathDebug = (id: string, el: HTMLElement, ax: number, ay: number,
     const cx = r.left + r.width / 2;
     const cy = r.top + r.height / 2;
     const dev = Math.hypot(cx - ex, cy - ey);
+    const abLen = Math.hypot(dx, dy) || 1;
+    const lineDist = Math.abs((cx - ax) * dy - (cy - ay) * dx) / abLen;
+    const tProj = ((cx - ax) * dx + (cy - ay) * dy) / (abLen * abLen);
+    const onLine = lineDist <= 2.5 && tProj >= -0.02 && tProj <= 1.02;
+    const rec = { t, expected: { x: ex, y: ey }, actual: { x: cx, y: cy }, deviation: dev };
+    const rec2 = { ...rec, lineDist, tProj, onLine };
+    if (!pathSamples.has(id)) pathSamples.set(id, []);
+    pathSamples.get(id)!.push(rec2);
     if (dev > 4) {
       try { console.warn('[PathDBG]', JSON.stringify({ id, t, expected: { x: ex, y: ey }, actual: { x: cx, y: cy }, deviation: dev })) } catch {}
     }
     if (t < 1) { rafId = requestAnimationFrame(poll) }
   };
   rafId = requestAnimationFrame(poll);
-  setTimeout(() => { if (rafId) cancelAnimationFrame(rafId) }, duration + 50);
+  setTimeout(() => {
+    if (rafId) cancelAnimationFrame(rafId);
+    const arr = pathSamples.get(id) || [];
+    try { console.log('[DBG-PathSamples]', id, arr) } catch {}
+    const maxLineDist = arr.reduce((m, s) => Math.max(m, s.lineDist ?? 0), 0);
+    const allOnLine = arr.every(s => s.onLine);
+    try { console.log('[DBG-PathVerify]', { id, A: { x: ax, y: ay }, B: { x: bx, y: by }, maxLineDist, allOnLine }) } catch {}
+    pathSamples.delete(id);
+  }, duration + 80);
 };
 
 const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: number; easing: string; type: string; from?: { x: number; y: number }; to?: { x: number; y: number } }> } | null) => {
@@ -167,39 +184,39 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
           duration: a.duration
         });
         if (a.from && a.to && draggedCard.value && draggedCard.value.id === a.cardId && layout.value === 'position') {
-          const unit = grid.value.unit ?? 89;
-          const gap = grid.value.gap;
-          const u = getCardUnits(draggedCard.value);
-          const width = u.w * unit + (u.w - 1) * gap;
-          const height = u.h * unit + (u.h - 1) * gap;
-          const containerRect = gridEl.value!.getBoundingClientRect();
-          const elRect = el.getBoundingClientRect();
-          const ax = elRect.left + elRect.width / 2;
-          const ay = elRect.top + elRect.height / 2;
-          const bx = containerRect.left + a.to.x * (unit + gap) + width / 2;
-          const by = containerRect.top + a.to.y * (unit + gap) + height / 2;
-          const dx = bx - ax;
-          const dy = by - ay;
-          const distance = Math.hypot(dx, dy);
-          const v = (props.dropSpeed ?? 1200);
-          const duration = Math.max(0, Math.round((distance / v) * 1000));
-          animations.value.set(a.cardId, { duration, easing: 'linear' });
+          const first = el.getBoundingClientRect();
           animSuppressMove.value.add(a.cardId);
-          el.style.transition = `transform ${duration}ms linear`;
-          el.style.transform = 'translate(0px, 0px)';
-          el.style.willChange = 'transform';
+          moveCard(a.cardId, { x: a.to!.x, y: a.to!.y });
           requestAnimationFrame(() => {
-            el.style.transform = `translate(${dx}px, ${dy}px)`;
+            const last = el.getBoundingClientRect();
+            const dx = first.left - last.left;
+            const dy = first.top - last.top;
+            const distance = Math.hypot(dx, dy);
+            const v = (props.dropSpeed ?? 1200);
+            const duration = Math.max(0, Math.round((distance / v) * 1000));
+            animations.value.set(a.cardId, { duration, easing: 'linear' });
+            el.style.transition = 'none';
+            el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+            el.style.willChange = 'transform';
+            el.style.pointerEvents = 'none';
+            requestAnimationFrame(() => {
+              el.style.transition = `transform ${duration}ms linear`;
+              el.style.transform = 'translate3d(0, 0, 0)';
+            });
+            const ax = first.left + first.width / 2;
+            const ay = first.top + first.height / 2;
+            const bx = last.left + last.width / 2;
+            const by = last.top + last.height / 2;
+            startLinePathDebug(a.cardId, el, ax, ay, bx, by, duration);
+            setTimeout(() => {
+              el.style.transition = '';
+              el.style.transform = '';
+              el.style.willChange = '';
+              el.style.pointerEvents = '';
+              animSuppressMove.value.delete(a.cardId);
+              animations.value.delete(a.cardId);
+            }, duration + 20);
           });
-          startLinePathDebug(a.cardId, el, ax, ay, bx, by, duration);
-          setTimeout(() => {
-            el.style.transition = '';
-            el.style.transform = '';
-            el.style.willChange = '';
-            animSuppressMove.value.delete(a.cardId);
-            animations.value.delete(a.cardId);
-            moveCard(a.cardId, { x: a.to!.x, y: a.to!.y });
-          }, duration + 20);
           continue;
         }
       }
@@ -207,12 +224,6 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
       setTimeout(() => {
         animations.value.delete(a.cardId);
       }, a.duration + 50);
-      setTimeout(() => {
-        const el2 = gridEl.value?.querySelector(`.bento-grid__card[data-id="${a.cardId}"]`) as HTMLElement | null;
-        if (!el2) return;
-        el2.classList.add('bento-bounce');
-        setTimeout(() => { el2.classList.remove('bento-bounce'); }, 180);
-      }, a.duration);
     }
   }
 };
@@ -445,7 +456,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     });
   };
   
-  const handleMouseUp = () => {
+  const handleMouseUp = (e?: MouseEvent | TouchEvent) => {
     console.log('[DND] Mouse up detected');
     if (hasPlacedOnce.value) {
       console.log('[Place] skip duplicate mouseup');
@@ -465,7 +476,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         dropShadowOpacity.value = 0;
         setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
       }
-      endDrag();
+      // 由 transform 动画接管，避免在此触发固定层 left/top 过渡
       setTimeout(() => {
         draggedCard.value = null;
         placeholderStyles.value = {};
@@ -497,6 +508,29 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       const intended = { x: gridX, y: gridY };
       const stillOverlap = overlapUnresolved.value || collidesAt(draggedCard.value, intended);
       const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
+
+      const containerRect = gridEl.value.getBoundingClientRect();
+      const cs = getComputedStyle(gridEl.value);
+      const paddingLeft = parseFloat(cs.paddingLeft || '0') || 0;
+      const paddingTop = parseFloat(cs.paddingTop || '0') || 0;
+      const release = (() => {
+        if (e && 'clientX' in e) return { x: e.clientX, y: e.clientY };
+        if (e && 'changedTouches' in e && e.changedTouches && e.changedTouches[0]) return { x: e.changedTouches[0].clientX, y: e.changedTouches[0].clientY };
+        return { x: NaN, y: NaN };
+      })();
+      const expectedCenter = { x: containerRect.left + paddingLeft + dropRect.value.left + dropRect.value.width / 2, y: containerRect.top + paddingTop + dropRect.value.top + dropRect.value.height / 2 };
+      const el = gridEl.value!.querySelector(`.bento-grid__card[data-id="${draggedCard.value.id}"]`) as HTMLElement | null;
+      const st = el ? getComputedStyle(el) : null;
+      const curLeft = st ? (parseFloat(st.left || '0') || 0) : draggedCard.value.position.x * (unit + gap);
+      const curTop = st ? (parseFloat(st.top || '0') || 0) : draggedCard.value.position.y * (unit + gap);
+      const u = unitsOf(draggedCard.value);
+      const width = u.w * unit + (u.w - 1) * gap;
+      const height = u.h * unit + (u.h - 1) * gap;
+      const A = { x: containerRect.left + paddingLeft + curLeft + width / 2, y: containerRect.top + paddingTop + curTop + height / 2 };
+      const B = expectedCenter;
+      console.log('[DBG-Release]', { client: release, local: { x: release.x - containerRect.left - paddingLeft, y: release.y - containerRect.top - paddingTop } });
+      console.log('[DBG-A]', A);
+      console.log('[DBG-B]', B);
       if (stillOverlap && dropRect.value) {
         dropRect.value = {
           left: origin.x * (unit + gap),
@@ -540,24 +574,24 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
           }
           // 直接移动卡片到原始位置，不再进行碰撞检测
           const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
-          moveCard(draggedCard.value.id, origin)
+          if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, origin)
           reverted = true
         } else if (collidesAt(draggedCard.value, intended)) {
           // 只有在没有 shadowPosition 时才进行传统的碰撞检测
           const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
-          applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: origin }] } as any)
+          applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', from: draggedCard.value.position, to: origin }] } as any)
           dropRect.value = {
             left: origin.x * (unit + gap),
             top: origin.y * (unit + gap),
             width: dropRect.value.width,
             height: dropRect.value.height
           } as any
-          moveCard(draggedCard.value.id, origin)
+          if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, origin)
           reverted = true
         } else {
           const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
           applyAnimations(planPlace as any)
-          moveCard(draggedCard.value.id, intended)
+          if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, intended)
         }
       } else {
         const ctx = {
@@ -572,8 +606,8 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         } as any
         const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
         applyAnimations(planPlace as any)
-        applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: intended }] } as any)
-        moveCard(draggedCard.value.id, intended)
+        applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', from: draggedCard.value.position, to: intended }] } as any)
+        if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, intended)
       }
       endDrag();
       if (gridEl.value && !reverted) {
@@ -591,7 +625,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         const plan2 = plugins.dispatch('onBeforeDrop', ctx as any)
         applyAnimations(plan2 as any)
         if (plan2 && plan2.moves && plan2.moves.length > 0) {
-          for (const mv of plan2.moves) moveCard(mv.cardId, mv.toPosition)
+          for (const mv of plan2.moves) { if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition) }
         }
       }
       saveLayout(props.storageKey);
@@ -879,7 +913,7 @@ const handleDrop = (e: DragEvent) => {
     const plan = plugins.dispatch('onBeforeDrop', ctx as any)
     applyAnimations(plan as any)
     if (plan && plan.moves && plan.moves.length > 0) {
-      for (const mv of plan.moves) { moveCard(mv.cardId, mv.toPosition) }
+      for (const mv of plan.moves) { if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition) }
     }
     
     // 如果插件返回了 shadowPosition，说明无法避让，直接回到原始位置
@@ -893,24 +927,24 @@ const handleDrop = (e: DragEvent) => {
       }
       // 直接移动卡片到原始位置，不再进行碰撞检测
       const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
-      moveCard(draggedCard.value.id, origin)
+      if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, origin)
       reverted = true
     } else if (collidesAt(draggedCard.value, intended)) {
       // 只有在没有 shadowPosition 时才进行传统的碰撞检测
       const origin = dragOriginPos.value ?? { x: draggedCard.value.position.x, y: draggedCard.value.position.y };
-      applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: origin }] } as any)
+      applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', from: draggedCard.value.position, to: origin }] } as any)
       dropRect.value = {
         left: origin.x * (unit + gap),
         top: origin.y * (unit + gap),
         width: dropRect.value.width,
         height: dropRect.value.height
       } as any
-      moveCard(draggedCard.value.id, origin)
+      if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, origin)
       reverted = true
     } else {
       const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
       applyAnimations(planPlace as any)
-      moveCard(draggedCard.value.id, intended)
+      if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, intended)
     }
     } else {
       const ctx = {
@@ -925,8 +959,8 @@ const handleDrop = (e: DragEvent) => {
       } as any
       const planPlace = plugins.dispatch('onBeforeDrop', ctx as any)
       applyAnimations(planPlace as any)
-      applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(0.34,1.56,0.64,1)', from: draggedCard.value.position, to: intended }] } as any)
-      moveCard(draggedCard.value.id, intended)
+      applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', from: draggedCard.value.position, to: intended }] } as any)
+      if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, intended)
     }
     const ctx = {
       gridEl: gridEl.value,
@@ -942,7 +976,7 @@ const handleDrop = (e: DragEvent) => {
       const plan = plugins.dispatch('onBeforeDrop', ctx as any)
       applyAnimations(plan as any)
       if (plan && plan.moves && plan.moves.length > 0) {
-        for (const mv of plan.moves) moveCard(mv.cardId, mv.toPosition)
+        for (const mv of plan.moves) { if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition) }
       }
     }
     saveLayout(props.storageKey);
@@ -1080,6 +1114,7 @@ onUnmounted(() => {
   pointer-events: none;
   z-index: 500;
 }
+
 
 @keyframes dragPulse {
   0%, 100% {
