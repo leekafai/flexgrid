@@ -276,6 +276,7 @@ interface Props {
   dropSpeed?: number;
   dropShadowFadeMs?: number;
   avoidanceDelayMs?: number;
+  reserveRows?: number;
 }
 
 const props = defineProps<Props>();
@@ -972,6 +973,7 @@ onMounted(() => {
   if (props.columns) grid.value.columns = props.columns;
   if (props.gap !== undefined) grid.value.gap = props.gap!;
   if (props.unit !== undefined) grid.value.unit = props.unit!;
+  if (props.reserveRows !== undefined) grid.value.overscanRows = props.reserveRows!; else grid.value.overscanRows = grid.value.overscanRows ?? 2;
   
   setViewportGridBounds(gridEl.value);
   loadLayout(props.storageKey);

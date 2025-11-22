@@ -47,6 +47,20 @@ export const useBentoGrid = () => {
         cards: cards.sort((a, b) => a.position.x - b.position.x) // 按x位置排序
       }));
   };
+  const rowsUsedByCards = () => {
+    return grid.value.cards.reduce((m, c) => {
+      const u = getCardUnits(c);
+      const hUnits = u.h;
+      return Math.max(m, (c.position?.y ?? 0) + hUnits);
+    }, 0);
+  };
+
+  const ensureReservedRowsFromCards = () => {
+    const n = rowsUsedByCards();
+    const current = grid.value.totalRows ?? 24;
+    const extra = grid.value.overscanRows ?? 2;
+    grid.value.totalRows = Math.max(n + extra, current);
+  };
 
   const addCard = (card: Omit<BentoCard, 'id'>) => {
     const newCard: BentoCard = {
@@ -73,6 +87,7 @@ export const useBentoGrid = () => {
         grid.value.rows.sort((a, b) => a.index - b.index);
       }
     }
+    ensureReservedRowsFromCards();
   };
 
   const removeCard = (cardId: string) => {
@@ -142,14 +157,17 @@ export const useBentoGrid = () => {
       const hUnits = u.h;
       return Math.max(m, (c.position?.y ?? 0) + hUnits);
     }, 0);
-    const height = toPx(maxY) - gap;
+    const usedHeight = Math.max(0, toPx(maxY) - gap);
+    const reservedRows = grid.value.totalRows ?? 0;
+    const reservedHeight = reservedRows > 0 ? Math.max(0, reservedRows * unit + Math.max(0, reservedRows - 1) * gap) : 0;
+    const height = Math.max(usedHeight, reservedHeight);
     return {
       display: 'block',
       maxWidth: grid.value.maxWidth,
       width: '100%',
       margin: '0 auto',
       padding: '16px',
-      height: `${Math.max(0, height)}px`,
+      height: `${height}px`,
       position: 'relative'
     } as const;
   });
@@ -262,7 +280,7 @@ export const useBentoGrid = () => {
   };
 
   const expandRowsForBottom = (bottomPx: number) => {
-    const unit = grid.value.unit ?? 36;
+    const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const currentRows = grid.value.totalRows ?? 24;
     const currentHeight = currentRows * unit + Math.max(0, currentRows - 1) * gap;
@@ -294,6 +312,7 @@ export const useBentoGrid = () => {
       if (grid.value.rows) {
         initializeRows();
       }
+      ensureReservedRowsFromCards();
     } catch {}
   };
 
