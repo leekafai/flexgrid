@@ -15,7 +15,7 @@ export const useBentoGrid = () => {
     totalRows: 24,
     overscanRows: 2
   });
-  const layout = ref<'flex' | 'grid' | 'position'>('flex');
+  
 
   const isDragging = ref(false);
   const draggedCard = ref<BentoCard | null>(null);
@@ -134,138 +134,41 @@ export const useBentoGrid = () => {
   };
 
   const getGridStyles = computed(() => {
-    if (layout.value === 'grid') {
-      const unit = grid.value.unit ?? 89;
-      const gapPx = grid.value.gap;
-      const rows = grid.value.totalRows ?? 24;
-      const height = rows * unit + Math.max(0, rows - 1) * gapPx;
-      return {
-        display: 'grid',
-        gridTemplateColumns: `repeat(${grid.value.columns}, 1fr)`,
-        gridAutoRows: `${grid.value.unit ?? 89}px`,
-        gridAutoFlow: 'dense',
-        gap: `${grid.value.gap}px`,
-        justifyItems: 'stretch',
-        alignItems: 'start',
-        maxWidth: grid.value.maxWidth,
-        width: '100%',
-        margin: '0 auto',
-        padding: '16px',
-        height: `${height}px`,
-        position: 'relative'
-      } as const;
-    }
-    if (layout.value === 'position') {
-      const unit = grid.value.unit ?? 89;
-      const gap = grid.value.gap;
-      const toPx = (n: number) => n * (unit + gap);
-      const maxY = grid.value.cards.reduce((m, c) => {
-        const u = getCardUnits(c);
-        const hUnits = u.h;
-        return Math.max(m, (c.position?.y ?? 0) + hUnits);
-      }, 0);
-      const height = toPx(maxY) - gap;
-      return {
-        display: 'block',
-        maxWidth: grid.value.maxWidth,
-        width: '100%',
-        margin: '0 auto',
-        padding: '16px',
-        height: `${Math.max(0, height)}px`,
-        position: 'relative'
-      } as const;
-    }
-    const gap = `${grid.value.gap}px`;
     const unit = grid.value.unit ?? 89;
-    const rows = grid.value.totalRows ?? 24;
-    const height = rows * unit + Math.max(0, rows - 1) * grid.value.gap;
+    const gap = grid.value.gap;
+    const toPx = (n: number) => n * (unit + gap);
+    const maxY = grid.value.cards.reduce((m, c) => {
+      const u = getCardUnits(c);
+      const hUnits = u.h;
+      return Math.max(m, (c.position?.y ?? 0) + hUnits);
+    }, 0);
+    const height = toPx(maxY) - gap;
     return {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap,
-      justifyContent: 'flex-start',
-      alignItems: 'flex-start',
+      display: 'block',
       maxWidth: grid.value.maxWidth,
       width: '100%',
       margin: '0 auto',
       padding: '16px',
-      height: `${height}px`,
+      height: `${Math.max(0, height)}px`,
       position: 'relative'
     } as const;
   });
 
   const getCardStyles = (card: BentoCard) => {
     const units = getCardUnits(card);
-    
-    if (layout.value === 'position') {
-      const unit = grid.value.unit ?? 89;
-      const gap = grid.value.gap;
-      const toPx = (n: number) => n * (unit + gap);
-      const left = toPx(card.position?.x ?? 0);
-      const top = toPx(card.position?.y ?? 0);
-      const width = units.w * unit + (units.w - 1) * gap;
-      const height = units.h * unit + (units.h - 1) * gap;
-      return {
-        position: 'absolute',
-        left: `${left}px`,
-        top: `${top}px`,
-        width: `${width}px`,
-        height: `${height}px`,
-        backgroundColor: card.style?.backgroundColor || '#ffffff',
-        color: card.style?.textColor || '#000000',
-        borderRadius: card.style?.borderRadius || '12px',
-        background: card.style?.gradient || undefined,
-        transform: isDragging.value && draggedCard.value?.id === card.id ? 'scale(1.02)' : 'scale(1)',
-        transition: 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)',
-        cursor: 'move',
-        userSelect: 'none',
-        willChange: 'transform'
-      } as const;
-    }
-    
-    if (grid.value.rows && grid.value.rows.length > 0) {
-      return {
-        gridColumn: `span ${units.w}`,
-        gridRow: `span ${units.h}`,
-        backgroundColor: card.style?.backgroundColor || '#ffffff',
-        color: card.style?.textColor || '#000000',
-        borderRadius: card.style?.borderRadius || '12px',
-        background: card.style?.gradient || undefined,
-        transform: isDragging.value && draggedCard.value?.id === card.id ? 'scale(1.02)' : 'scale(1)',
-        transition: 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)',
-        cursor: 'move',
-        userSelect: 'none',
-        willChange: 'transform',
-        placeSelf: 'start',
-        margin: '0'
-      } as const;
-    }
-
-    // 回退到旧的flex布局
-    if (layout.value === 'grid') {
-      return {
-        gridColumn: `span ${units.w}`,
-        gridRow: `span ${units.h}`,
-        backgroundColor: card.style?.backgroundColor || '#ffffff',
-        color: card.style?.textColor || '#000000',
-        borderRadius: card.style?.borderRadius || '12px',
-        background: card.style?.gradient || undefined,
-        transform: isDragging.value && draggedCard.value?.id === card.id ? 'scale(1.02)' : 'scale(1)',
-        transition: 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)',
-        cursor: 'move',
-        userSelect: 'none',
-        willChange: 'transform'
-      } as const;
-    }
-    
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
-    const minWidth = units.w * unit + (units.w - 1) * gap;
-    const minHeight = units.h * unit + (units.h - 1) * gap;
+    const toPx = (n: number) => n * (unit + gap);
+    const left = toPx(card.position?.x ?? 0);
+    const top = toPx(card.position?.y ?? 0);
+    const width = units.w * unit + (units.w - 1) * gap;
+    const height = units.h * unit + (units.h - 1) * gap;
     return {
-      flex: '0 1 auto',
-      minWidth: `${minWidth}px`,
-      minHeight: `${minHeight}px`,
+      position: 'absolute',
+      left: `${left}px`,
+      top: `${top}px`,
+      width: `${width}px`,
+      height: `${height}px`,
       backgroundColor: card.style?.backgroundColor || '#ffffff',
       color: card.style?.textColor || '#000000',
       borderRadius: card.style?.borderRadius || '12px',
@@ -398,7 +301,6 @@ export const useBentoGrid = () => {
     grid,
     isDragging,
     draggedCard,
-    layout,
     addCard,
     removeCard,
     updateCard,

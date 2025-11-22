@@ -2,7 +2,7 @@
   <div class="test-page">
     <div class="test-header">
       <h1>Position 布局测试</h1>
-      <p>绝对定位与坐标映射方案验证（layout="position"）</p>
+      
     </div>
 
     <div class="test-controls">
@@ -16,7 +16,7 @@
     </div>
 
     <div class="test-grid-container">
-      <BentoGrid ref="gridRef" storage-key="test-p-grid" layout="position" :debug-drop-color="dropColor">
+      <BentoGrid ref="gridRef" storage-key="test-p-grid" :debug-drop-color="dropColor">
         <template #card="{ card, index }">
           <div class="test-card-content">
             <div class="badge">#{{ index + 1 }}</div>

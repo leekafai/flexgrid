@@ -1,58 +1,19 @@
 <template>
-  <div class="bento-grid" :style="gridStyles" ref="gridEl" @dragover.prevent="handleDragOver" @dragenter.prevent="handleDragEnter" @drop.prevent="handleDrop" :data-layout="layout">
-    <!-- 新的基于行的结构 -->
-    <div
-      v-if="layout !== 'position' && grid.rows && grid.rows.length > 0"
-      v-for="row in grid.rows"
-      :key="row.id"
-      class="bento-grid__row"
-      :data-row-id="row.id"
-      :data-row-index="row.index"
-      :style="{
-        '--grid-columns': grid.columns,
-        '--grid-gap': `${grid.gap}px`
-      }"
+  <div class="bento-grid" :style="gridStyles" ref="gridEl" @dragover.prevent="handleDragOver" @dragenter.prevent="handleDragEnter" @drop.prevent="handleDrop">
+    <BentoCard
+      v-for="(card, idx) in grid.cards"
+      :key="card.id"
+      :card="card"
+      :is-dragging="draggedCard?.id === card.id"
+      @update="handleCardUpdate"
+      @remove="handleCardRemove"
+      @drag-start="handleDragStart"
+      class="bento-grid__card"
+      :style="[getCardStyles(card), getDragStylesSafe(card), getAnimStyles(card)]"
+      :data-id="card.id"
     >
-      <BentoCard
-        v-for="(card, cardIndex) in row.cards"
-        :key="card.id"
-        :card="card"
-        :is-dragging="draggedCard?.id === card.id"
-        @update="handleCardUpdate"
-        @remove="handleCardRemove"
-        @drag-start="handleDragStart"
-        class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStylesSafe(card), getAnimStyles(card)]"
-        :data-id="card.id"
-        :data-row-index="row.index"
-        :data-card-index="cardIndex"
-      >
-        <slot name="card" :card="card" :index="cardIndex" />
-      </BentoCard>
-      
-      <!-- 空行的占位符 -->
-      <div v-if="row.cards.length === 0" class="bento-grid__row-placeholder">
-        <span>空行 {{ row.index }}</span>
-      </div>
-    </div>
-    
-    <!-- 回退到旧的卡片列表结构 -->
-    <template v-else>
-      <BentoCard
-        v-for="(card, idx) in grid.cards"
-        :key="card.id"
-        :card="card"
-        :is-dragging="draggedCard?.id === card.id"
-        @update="handleCardUpdate"
-        @remove="handleCardRemove"
-        @drag-start="handleDragStart"
-        class="bento-grid__card"
-        :style="[getCardStyles(card), getDragStylesSafe(card), getAnimStyles(card)]"
-        :data-id="card.id"
-      >
-        <slot name="card" :card="card" :index="idx" />
-      </BentoCard>
-    </template>
+      <slot name="card" :card="card" :index="idx" />
+    </BentoCard>
     
     <!-- 拖拽目标阴影 -->
     <div
@@ -89,7 +50,6 @@ const {
   getGridStyles, 
   getCardStyles, 
   getCardUnits,
-  layout, 
   reorderCardByIndex, 
   saveLayout, 
   loadLayout, 
@@ -198,7 +158,7 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
           easing: a.easing,
           duration: a.duration
         });
-        if (a.from && a.to && draggedCard.value && draggedCard.value.id === a.cardId && layout.value === 'position') {
+        if (a.from && a.to && draggedCard.value && draggedCard.value.id === a.cardId) {
           const first = el.getBoundingClientRect();
           animSuppressMove.value.add(a.cardId);
           moveCard(a.cardId, { x: a.to!.x, y: a.to!.y });
@@ -226,6 +186,16 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
             const by = last.top + last.height / 2;
             startLinePathDebug(a.cardId, el, ax, ay, bx, by, duration);
             setTimeout(() => {
+              el.style.transition = 'none';
+              el.style.transform = 'translate3d(0, 0, 0) scale(0.98)';
+              el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0)';
+              requestAnimationFrame(() => {
+                el.style.transition = 'transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 140ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+                el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
+                el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
+              });
+            }, duration + 10);
+            setTimeout(() => {
               el.style.transition = '';
               el.style.transform = '';
               el.style.boxShadow = '';
@@ -233,7 +203,7 @@ const applyAnimations = (plan: { animations?: Array<{ cardId: string; duration: 
               el.style.pointerEvents = '';
               animSuppressMove.value.delete(a.cardId);
               animations.value.delete(a.cardId);
-            }, duration + 20);
+            }, duration + 10 + 160 + 20);
           });
           continue;
         }
@@ -263,7 +233,6 @@ const unitsOf = (card: BentoCardType) => {
 };
 
 const getAnimStyles = (card: BentoCardType) => {
-  if (layout.value !== 'position') return {} as any;
   const anim = animations.value.get(card.id);
   const base = 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)';
   const isDragged = draggedCard.value && draggedCard.value.id === card.id;
@@ -272,7 +241,7 @@ const getAnimStyles = (card: BentoCardType) => {
 };
 
 const getDragStylesSafe = (card: BentoCardType) => {
-  if (layout.value === 'position' && animations.value.has(card.id)) return {} as any;
+  if (animations.value.has(card.id)) return {} as any;
   return getDragStyles(card as any, grid.value.unit ?? 89, grid.value.gap) as any;
 };
 
@@ -302,7 +271,6 @@ interface Props {
   unit?: number;
   breakpoints?: { mobile: number; tablet: number; desktop: number };
   virtualized?: boolean;
-  layout?: 'flex' | 'grid' | 'position';
   storageKey?: string;
   debugDropColor?: string;
   dropSpeed?: number;
@@ -357,7 +325,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
   
   setViewportGridBounds(gridEl.value);
 
-  if (layout.value === 'position' && gridEl.value) {
+  if (gridEl.value) {
     const ctx = {
       gridEl: gridEl.value,
       columns: grid.value.columns,
@@ -381,7 +349,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     
     // 使用新的基于行的拖拽更新
     updateDrag(e, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
-      if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return
+      if (!gridEl.value || !dropRect.value || !draggedCard.value) return
       const unit = grid.value.unit ?? 89
       const gap = grid.value.gap
       const cell = unit + gap
@@ -429,7 +397,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       expandRowsForBottom(bottom);
     }
 
-    if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+    if (gridEl.value && draggedCard.value) {
       requestAnimationFrame(() => {
         if (!dropRect.value) return
         const ctx = {
@@ -519,7 +487,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
       );
     }
 
-    if (layout.value === 'position' && draggedCard.value && dropRect.value && gridEl.value) {
+    if (draggedCard.value && dropRect.value && gridEl.value) {
       const unit = grid.value.unit ?? 89;
       const gap = grid.value.gap;
       const cell = unit + gap;
@@ -667,36 +635,7 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
     }
   
     // 使用新的基于行的放置逻辑
-    if (layout.value !== 'position' && draggedCard.value && dragState.value) {
-      const { targetRowIndex, targetCardIndex } = dragState.value;
-      
-      console.log('[DND] Attempting to place card:', {
-        cardId: draggedCard.value.id,
-        targetRowIndex,
-        targetCardIndex
-      });
-      
-      // 确保目标行存在
-      if (targetRowIndex !== undefined) {
-        let targetRow = grid.value.rows?.find(r => r.index === targetRowIndex);
-        if (!targetRow && dragState.value?.dropRow === undefined) {
-          // 创建新行
-          console.log('[DND] Creating new row at index:', targetRowIndex);
-          targetRow = addRow(targetRowIndex);
-        }
-        
-        // 移动卡片到新行
-        console.log('[DND] Moving card to row:', targetRowIndex, 'at position:', targetCardIndex);
-        moveCardToRow(draggedCard.value.id, targetRowIndex, targetCardIndex);
-      }
-      
-      saveLayout(props.storageKey);
-      if (dropTargetVisible.value) {
-        dropShadowDropping.value = true;
-        dropShadowOpacity.value = 0;
-        setTimeout(() => { dropTargetVisible.value = false; dropShadowDropping.value = false; }, props.dropShadowFadeMs ?? 220);
-      }
-    }
+    
     
     console.log('[DND] grid mouseup completed', { 
       draggedId: draggedCard.value?.id, 
@@ -720,7 +659,7 @@ const handleDragOver = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
   updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
-    if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return;
+    if (!gridEl.value || !dropRect.value || !draggedCard.value) return;
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
@@ -765,7 +704,7 @@ const handleDragOver = (e: DragEvent) => {
     const bottom = dropRect.value.top + dropRect.value.height;
     expandRowsForBottom(bottom);
   }
-  if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+  if (gridEl.value && draggedCard.value) {
     requestAnimationFrame(() => {
       if (!dropRect.value) return
     const unit = grid.value.unit ?? 89;
@@ -816,7 +755,7 @@ const handleDragEnter = (e: DragEvent) => {
   if (!isDragging.value) return;
   if (e.dataTransfer) e.dataTransfer.dropEffect = 'move';
   updateDrag(e as unknown as MouseEvent, grid.value.columns, grid.value.gap, grid.value.unit ?? 89, grid.value.rows, gridEl.value!, () => {
-    if (layout.value !== 'position' || !gridEl.value || !dropRect.value || !draggedCard.value) return;
+    if (!gridEl.value || !dropRect.value || !draggedCard.value) return;
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
@@ -848,7 +787,7 @@ const handleDragEnter = (e: DragEvent) => {
       for (const mv of plan.moves) { if (!animSuppressMove.value.has(mv.cardId)) moveCard(mv.cardId, mv.toPosition); }
     }
   });
-  if (layout.value === 'position' && gridEl.value && draggedCard.value) {
+  if (gridEl.value && draggedCard.value) {
     requestAnimationFrame(() => {
       if (!dropRect.value) return
     const unit = grid.value.unit ?? 89;
@@ -894,26 +833,7 @@ const handleDrop = (e: DragEvent) => {
     return;
   }
   
-  // 使用新的基于行的放置逻辑
-  if (layout.value !== 'position' && dragState.value) {
-    const { targetRowIndex, targetCardIndex } = dragState.value;
-    
-    if (targetRowIndex !== undefined) {
-      let targetRow = grid.value.rows?.find(r => r.index === targetRowIndex);
-      if (!targetRow && dragState.value?.dropRow === undefined) {
-        targetRow = addRow(targetRowIndex);
-      }
-      
-      moveCardToRow(draggedCard.value.id, targetRowIndex, targetCardIndex);
-    }
-    
-    saveLayout(props.storageKey);
-    if (dropTargetVisible.value) {
-      dropShadowOpacity.value = 0;
-      setTimeout(() => { dropTargetVisible.value = false; }, props.dropShadowFadeMs ?? 220);
-    }
-  }
-  if (layout.value === 'position' && dropRect.value && draggedCard.value && gridEl.value) {
+  if (dropRect.value && draggedCard.value && gridEl.value) {
     const unit = grid.value.unit ?? 89;
     const gap = grid.value.gap;
     const cell = unit + gap;
@@ -1052,7 +972,7 @@ onMounted(() => {
   if (props.columns) grid.value.columns = props.columns;
   if (props.gap !== undefined) grid.value.gap = props.gap!;
   if (props.unit !== undefined) grid.value.unit = props.unit!;
-  if (props.layout) layout.value = props.layout;
+  
   setViewportGridBounds(gridEl.value);
   loadLayout(props.storageKey);
 });

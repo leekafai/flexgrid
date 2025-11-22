@@ -31,7 +31,7 @@ export interface AnimationComposable {
   animSuppressMove: Ref<Set<string>>;
   
   // Methods
-  getCardAnimationStyles: (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null, layout: string) => any;
+  getCardAnimationStyles: (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null) => any;
   createIntersectionObserver: (callback: (entries: IntersectionObserverEntry[]) => void) => IntersectionObserver;
   applyAnimations: (plan: AnimationPlan | null, moveCard: (cardId: string, position: { x: number; y: number }) => void) => void;
   startPathDebug: (id: string, el: HTMLElement, ax: number, ay: number, bx: number, by: number, duration: number) => void;
@@ -41,9 +41,7 @@ export function useBentoAnimations(): AnimationComposable {
   const animations = ref(new Map<string, AnimationState>());
   const animSuppressMove = ref(new Set<string>());
 
-  const getCardAnimationStyles = (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null, layout: string) => {
-    if (layout !== 'position') return {};
-    
+  const getCardAnimationStyles = (card: BentoCardType, isDragging: boolean, draggedCard: BentoCardType | null) => {
     const anim = animations.value.get(card.id);
     const base = 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)';
     const isDragged = draggedCard && draggedCard.id === card.id;

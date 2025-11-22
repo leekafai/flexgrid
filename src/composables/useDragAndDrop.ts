@@ -283,187 +283,24 @@ export const useDragAndDrop = () => {
             const u = getUnitsForCard(draggedCard.value!);
             return { width: u.w * unit + (u.w - 1) * gap, height: u.h * unit + (u.h - 1) * gap };
           })();
-          
-          const isPosition = gridElement.getAttribute('data-layout') === 'position';
-          if (!isPosition && rows && rows.length > 0) {
-            const newDragState = findTargetRow(clientY, rows, gridElement);
-            if (newDragState) {
-              dragState.value = newDragState;
-              
-              // 计算阴影位置
-              const containerRect = gridElement.getBoundingClientRect();
-              let shadowTop = 0;
-              let shadowLeft = 0;
-              
-              if (newDragState.dropRow) {
-                // 如果目标行存在，计算在行内的位置
-                const rowElement = gridElement.querySelector(`[data-row-id="${newDragState.dropRow.id}"]`) as HTMLElement;
-                if (rowElement) {
-                  const rowRect = rowElement.getBoundingClientRect();
-                  shadowTop = rowRect.top - containerRect.top;
-                  
-                  // 计算在行内的水平位置
-                  if (newDragState.dropRow.cards.length === 0 || newDragState.targetCardIndex === 0) {
-                    shadowLeft = 16; // 行的左边距
-                  } else if (newDragState.targetCardIndex >= newDragState.dropRow.cards.length) {
-                    // 放在行末
-                    const lastCardElement = rowElement.querySelector('.bento-grid__card:last-child') as HTMLElement;
-                    if (lastCardElement) {
-                      const lastCardRect = lastCardElement.getBoundingClientRect();
-                      shadowLeft = lastCardRect.right - containerRect.left + gap;
-                    } else {
-                      shadowLeft = 16;
-                    }
-                  } else {
-                    // 插入到指定位置
-                    const targetCardElement = rowElement.querySelectorAll('.bento-grid__card')[newDragState.targetCardIndex] as HTMLElement;
-                    if (targetCardElement) {
-                      const targetCardRect = targetCardElement.getBoundingClientRect();
-                      shadowLeft = targetCardRect.left - containerRect.left;
-                    } else {
-                      shadowLeft = 16;
-                    }
-                  }
-                }
-              } else {
-                // 新行，计算垂直位置
-                if (rows.length > 0) {
-                  const sortedRows = [...rows].sort((a, b) => a.index - b.index);
-                  let insertAfter = null;
-                  
-                  for (let i = 0; i < sortedRows.length; i++) {
-                    if (newDragState.targetRowIndex < sortedRows[i].index) {
-                      break;
-                    }
-                    insertAfter = sortedRows[i];
-                  }
-                  
-                  if (insertAfter) {
-                    const afterElement = gridElement.querySelector(`[data-row-id="${insertAfter.id}"]`) as HTMLElement;
-                    if (afterElement) {
-                      const afterRect = afterElement.getBoundingClientRect();
-                      shadowTop = afterRect.bottom - containerRect.top + gap;
-                    }
-                  } else {
-                    shadowTop = 16; // 第一行
-                  }
-                } else {
-                  shadowTop = 16; // 没有任何行
-                }
-                shadowLeft = 16;
-              }
-              
-              dropRect.value = {
-                left: Math.max(0, shadowLeft),
-                top: Math.max(0, shadowTop),
-                width: draggedSize.width,
-                height: draggedSize.height,
-                rowIndex: newDragState.targetRowIndex
-              };
-              
-              dropIndex.value = newDragState.targetCardIndex;
-            }
-          } else {
-            const isPositionElse = gridElement.getAttribute('data-layout') === 'position';
-            if (isPositionElse) {
-              const draggedDom = gridElement.querySelector(`.bento-grid__card[data-id="${draggedCard.value?.id}"]`) as HTMLElement | null;
-              const domRect = draggedDom ? draggedDom.getBoundingClientRect() : null;
-              const effX = (typeof clientX === 'number' && !Number.isNaN(clientX)) ? clientX : (domRect ? domRect.left + domRect.width / 2 : pointerPos.value.x);
-              const effY = (typeof clientY === 'number' && !Number.isNaN(clientY)) ? clientY : (domRect ? domRect.top + domRect.height / 2 : pointerPos.value.y);
-              const pos = getDropPosition(effX, effY, gridElement, columns, gap, unit);
-              const units = getUnitsForCard(draggedCard.value!);
-              const maxX = Math.max(0, columns - units.w);
-              const gridX = Math.max(0, Math.min(pos.x, maxX));
-              const gridY = Math.max(0, pos.y);
-              const containerRect = gridElement.getBoundingClientRect();
-              if (process.env.NODE_ENV === 'development') {
-                console.log('[DND] position 阴影坐标->网格:', { effX, effY, gridX, gridY, units })
-              }
-              dropRect.value = {
-                left: gridX * (unit + gap),
-                top: gridY * (unit + gap),
-                width: draggedSize.width,
-                height: draggedSize.height
-              };
-              dropIndex.value = -1;
-              dropTarget.value = { x: gridX, y: gridY };
-            } else {
-              // 回退到旧的逻辑
-              const children = Array.from(gridElement.querySelectorAll('.bento-grid__card')) as HTMLElement[];
-              const targetEl = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-              let idx = -1;
-              if (targetEl) {
-                const cardEl = targetEl.closest('.bento-grid__card') as HTMLElement | null;
-                if (cardEl) idx = children.indexOf(cardEl);
-              }
 
-              const draggedEl = gridElement.querySelector(`.bento-grid__card[data-id="${draggedCard.value?.id}"]`) as HTMLElement | null;
-              const others = children.filter(el => el !== draggedEl);
-              const containerRect = gridElement.getBoundingClientRect();
-
-              if (idx === -1) {
-                const rowTolerance = 8;
-                const rects = others
-                  .map(el => ({ el, rect: el.getBoundingClientRect(), domIndex: children.indexOf(el) }))
-                  .sort((a, b) => a.rect.top - b.rect.top || a.rect.left - b.rect.left);
-
-                const rows: Array<{ top: number; items: typeof rects }> = [];
-                rects.forEach(item => {
-                  const last = rows[rows.length - 1];
-                  if (!last || Math.abs(item.rect.top - last.top) > rowTolerance) {
-                    rows.push({ top: item.rect.top, items: [item] });
-                  } else {
-                    last.items.push(item);
-                  }
-                });
-
-                let rowIdx = 0;
-                for (let i = 0; i < rows.length; i++) {
-                  const top = rows[i].top;
-                  const nextTop = i + 1 < rows.length ? rows[i + 1].top : Infinity;
-                  if (clientY >= top && clientY < nextTop) { rowIdx = i; break; }
-                  if (clientY >= nextTop) rowIdx = i + 1;
-                }
-                rowIdx = Math.min(rowIdx, Math.max(0, rows.length - 1));
-
-                const items = (rows[rowIdx]?.items ?? []).sort((a, b) => a.rect.left - b.rect.left);
-                let posIdx = 0;
-                for (let i = 0; i < items.length; i++) {
-                  const cx = items[i].rect.left + items[i].rect.width / 2;
-                  if (clientX >= cx) posIdx = i + 1;
-                }
-                if (items.length === 0) {
-                  idx = children.length;
-                } else if (posIdx >= items.length) {
-                  idx = items[items.length - 1].domIndex + 1;
-                } else {
-                  idx = items[posIdx].domIndex;
-                }
-              }
-              dropIndex.value = idx;
-
-              if (idx >= 0 && idx < children.length) {
-                const refRect = children[idx].getBoundingClientRect();
-                dropRect.value = {
-                  left: Math.max(0, Math.min(refRect.left - containerRect.left, containerRect.width - draggedSize.width)),
-                  top: Math.max(0, Math.min(refRect.top - containerRect.top, containerRect.height - draggedSize.height)),
-                  width: draggedSize.width,
-                  height: draggedSize.height
-                };
-              } else {
-                const leftGuess = Math.max(0, Math.min(clientX - containerRect.left - draggedSize.width / 2, containerRect.width - draggedSize.width));
-                const topGuess = Math.max(0, Math.min(clientY - containerRect.top - draggedSize.height / 2, containerRect.height - draggedSize.height));
-                dropRect.value = {
-                  left: leftGuess,
-                  top: topGuess,
-                  width: draggedSize.width,
-                  height: draggedSize.height
-                };
-              }
-            }
-          }
-          
-          dropTarget.value = { x: 0, y: 0 };
+          const draggedDom = gridElement.querySelector(`.bento-grid__card[data-id="${draggedCard.value?.id}"]`) as HTMLElement | null;
+          const domRect = draggedDom ? draggedDom.getBoundingClientRect() : null;
+          const effX = (typeof clientX === 'number' && !Number.isNaN(clientX)) ? clientX : (domRect ? domRect.left + domRect.width / 2 : pointerPos.value.x);
+          const effY = (typeof clientY === 'number' && !Number.isNaN(clientY)) ? clientY : (domRect ? domRect.top + domRect.height / 2 : pointerPos.value.y);
+          const pos = getDropPosition(effX, effY, gridElement, columns, gap, unit);
+          const units = getUnitsForCard(draggedCard.value!);
+          const maxX = Math.max(0, columns - units.w);
+          const gridX = Math.max(0, Math.min(pos.x, maxX));
+          const gridY = Math.max(0, pos.y);
+          dropRect.value = {
+            left: gridX * (unit + gap),
+            top: gridY * (unit + gap),
+            width: draggedSize.width,
+            height: draggedSize.height
+          };
+          dropIndex.value = -1;
+          dropTarget.value = { x: gridX, y: gridY };
           console.log('[DND] dnd.updateDrag', { 
             id: draggedCard.value.id, 
             pointer: pointerPos.value, 
