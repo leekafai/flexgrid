@@ -417,7 +417,8 @@ export const useDragAndDrop = () => {
       pointerEvents: 'none',
       zIndex: 999,
       opacity: 0.8,
-      transition: 'transform 0.1s ease, left 0.1s ease, top 0.1s ease, opacity 220ms ease'
+      transition: 'left 140ms cubic-bezier(.2,.8,.2,1), top 140ms cubic-bezier(.2,.8,.2,1), transform 120ms cubic-bezier(.2,.8,.2,1), opacity 220ms ease',
+      willChange: 'left, top, transform, opacity'
     } as const;
   };
 

@@ -90,12 +90,10 @@ const dropShadowStyle = computed(() => {
   const s: CSSProperties = { opacity: dropShadowOpacity.value } as any;
   if (dropShadowDropping.value) {
     (s as any).transform = 'scale(0.96)';
-    (s as any).transition = `transform ${ms}ms cubic-bezier(.2,.8,.2,1), opacity ${ms}ms cubic-bezier(.2,.8,.2,1)`;
     (s as any).animation = 'none';
     (s as any).boxShadow = '0 8px 24px rgba(0,0,0,0.10)';
   } else {
     (s as any).transform = 'scale(1)';
-    (s as any).transition = 'transform 100ms ease, opacity 100ms ease';
     (s as any).animation = 'dropTargetPulse 1s infinite';
   }
   return s as any;
