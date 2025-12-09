@@ -7,6 +7,7 @@
       :is-dragging="draggedCard?.id === card.id"
       @update="handleCardUpdate"
       @remove="handleCardRemove"
+      @store="handleCardStore"
       @drag-start="handleDragStart"
       class="bento-grid__card"
       :style="[getCardStyles(card), getDragStylesSafe(card), getAnimStyles(card)]"
@@ -255,9 +256,10 @@ const collidesAt = (card: BentoCardType, pos: { x: number; y: number }) => {
   return false;
 };
 
-// Expose addCard method for parent components
+// Expose methods for parent components
 defineExpose({
   addCard,
+  removeCard,
   saveLayout,
   loadLayout,
   reorderCardByIndex
@@ -279,6 +281,10 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const emit = defineEmits<{
+  'store-card': [card: BentoCardType];
+}>();
+
 const placeholderStyles = ref({});
 const gridEl = ref<HTMLElement | null>(null);
 
@@ -294,6 +300,11 @@ const handleCardUpdate = (cardId: string, updates: Partial<BentoCardType>) => {
 
 const handleCardRemove = (cardId: string) => {
   removeCard(cardId);
+};
+
+const handleCardStore = (card: BentoCardType) => {
+  console.log('BentoGrid 收到收纳事件，卡片信息:', card.id, card.title);
+  emit('store-card', card);
 };
 
 const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) => {

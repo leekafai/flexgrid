@@ -40,6 +40,7 @@
       <button
         class="bento-card__resize-btn"
         @click="cycleSize"
+        data-control="resize"
         title="Resize card"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
@@ -52,10 +53,24 @@
       <button
         class="bento-card__remove-btn"
         @click="handleRemove"
+        data-control="remove"
         title="Remove card"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2"/>
+        </svg>
+      </button>
+      
+      <button
+        class="bento-card__store-btn"
+        @click.stop="handleStore"
+        data-control="store"
+        title="收纳卡片"
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
+          <rect x="3" y="3" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2"/>
+          <rect x="6" y="6" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" opacity="0.7"/>
+          <rect x="9" y="9" width="18" height="14" rx="2" stroke="currentColor" stroke-width="2" opacity="0.4"/>
         </svg>
       </button>
     </div>
@@ -78,6 +93,7 @@ interface Emits {
   (e: 'update', cardId: string, updates: Partial<BentoCard>): void;
   (e: 'remove', cardId: string): void;
   (e: 'drag-start', card: BentoCard, event: MouseEvent | TouchEvent): void;
+  (e: 'store', card: BentoCard): void;
 }
 
 const props = defineProps<Props>();
@@ -111,6 +127,13 @@ const cardStyles = computed(() => ({
 const getCardComponent = () => null;
 
 const handleMouseDown = (event: MouseEvent) => {
+  // 检查是否点击了控制按钮，如果是则不触发拖拽
+  const target = event.target as HTMLElement;
+  if (target.closest('[data-control]')) {
+    console.log('点击控制按钮，不触发DND');
+    return;
+  }
+  
   if (props.card.interactive) {
     emit('drag-start', props.card, event);
   }
@@ -121,6 +144,13 @@ const handleMouseDown = (event: MouseEvent) => {
 };
 
 const handleTouchStart = (event: TouchEvent) => {
+  // 检查是否点击了控制按钮，如果是则不触发拖拽
+  const target = event.target as HTMLElement;
+  if (target.closest('[data-control]')) {
+    console.log('触摸控制按钮，不触发DND');
+    return;
+  }
+  
   if (props.card.interactive) {
     emit('drag-start', props.card, event);
   }
@@ -151,6 +181,11 @@ const handleUpdate = (updates: Partial<BentoCard>) => {
 
 const handleRemove = () => {
   emit('remove', props.card.id);
+};
+
+const handleStore = () => {
+  console.log('收纳按钮被点击，卡片信息:', props.card.id, props.card.title);
+  emit('store', props.card);
 };
 
 const cycleSize = () => {
@@ -234,6 +269,8 @@ const cycleSize = () => {
   gap: 4px;
   opacity: 0;
   transition: opacity 0.2s ease;
+  z-index: 10;
+  pointer-events: auto;
 }
 
 .bento-card:hover .bento-card__controls {
@@ -241,7 +278,8 @@ const cycleSize = () => {
 }
 
 .bento-card__resize-btn,
-.bento-card__remove-btn {
+.bento-card__remove-btn,
+.bento-card__store-btn {
   width: 28px;
   height: 28px;
   border: none;
@@ -257,7 +295,8 @@ const cycleSize = () => {
 }
 
 .bento-card__resize-btn:hover,
-.bento-card__remove-btn:hover {
+.bento-card__remove-btn:hover,
+.bento-card__store-btn:hover {
   background: rgba(255, 255, 255, 1);
   color: #333;
   transform: scale(1.1);
@@ -266,6 +305,15 @@ const cycleSize = () => {
 .bento-card__remove-btn:hover {
   background: #ff4444;
   color: white;
+}
+
+.bento-card__store-btn:hover {
+  background: #3b82f6;
+  color: white;
+}
+
+.bento-card__store-btn:active {
+  transform: scale(0.9);
 }
 </style>
 const handleMouseUpDoc = () => {

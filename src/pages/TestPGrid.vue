@@ -16,7 +16,7 @@
     </div>
 
     <div class="test-grid-container">
-      <BentoGrid ref="gridRef" storage-key="test-p-grid" :debug-drop-color="dropColor">
+      <BentoGrid ref="gridRef" storage-key="test-p-grid" :debug-drop-color="dropColor" @store-card="handleStoreCard">
         <template #card="{ card, index }">
           <div class="test-card-content">
             <div class="badge">#{{ index + 1 }}</div>
@@ -27,18 +27,28 @@
         </template>
       </BentoGrid>
     </div>
+    
+    <!-- 浮动面板 -->
+    <FloatingPanel
+      @restore-card="handleRestoreCard"
+      @remove-stored-card="handleRemoveStoredCard"
+      @add-card="handleAddCard"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import BentoGrid from '@/components/BentoGrid.vue';
+import FloatingPanel from '@/components/FloatingPanel.vue';
 import { useBentoGrid } from '@/composables/useBentoGrid';
+import { useFloatingPanel } from '@/composables/useFloatingPanel';
 import type { BentoCard } from '@/types/bento';
 import bentoData from '../../bento_data.json';
 
 const gridRef = ref<InstanceType<typeof BentoGrid>>();
 const { grid } = useBentoGrid();
+const { addToStorage, removeFromStorage } = useFloatingPanel();
 const dropColor = ref<string | undefined>(undefined);
 
 const parseUnits = (style?: string) => {
@@ -82,6 +92,53 @@ const clearGrid = () => {
 onMounted(() => {
   loadJson();
 });
+
+// 浮动面板事件处理
+const handleStoreCard = (card: BentoCard) => {
+  console.log('TestPGrid 收到收纳事件，卡片信息:', card.id, card.title);
+  // 收纳卡片：添加到存储并移除出网格
+  addToStorage(card);
+  gridRef.value?.removeCard(card.id);
+};
+
+const handleRestoreCard = (card: BentoCard) => {
+  // 从收纳区恢复卡片到网格
+  const restoredCard = removeFromStorage(card.id);
+  if (restoredCard) {
+    // 添加到网格的末尾
+    gridRef.value?.addCard({
+      ...restoredCard,
+      position: { x: 0, y: restoredCard.position?.y || grid.value.cards.length }
+    });
+  }
+};
+
+const handleRemoveStoredCard = (cardId: string) => {
+  // 从收纳区删除卡片
+  removeFromStorage(cardId);
+};
+
+const handleAddCard = (type: string) => {
+  // 根据类型添加新卡片
+  const cardSizes: Array<'small' | 'medium' | 'large' | 'wide'> = ['small', 'medium', 'large', 'wide'];
+  const size = cardSizes[Math.floor(Math.random() * cardSizes.length)];
+  
+  const card: Omit<BentoCard, 'id'> = {
+    type,
+    title: `新${type}卡片 ${Date.now()}`,
+    content: `这是 ${type} 类型的新卡片`,
+    size,
+    position: { x: 0, y: grid.value.cards.length },
+    interactive: true,
+    style: {
+      backgroundColor: `hsl(${Math.random() * 360}, 70%, 80%)`,
+      textColor: '#333',
+      borderRadius: '16px'
+    }
+  };
+  
+  gridRef.value?.addCard(card);
+};
 
 const toggleRed = () => {
   dropColor.value = dropColor.value ? undefined : 'rgba(255,0,0,0.18)';
