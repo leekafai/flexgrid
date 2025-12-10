@@ -18,6 +18,8 @@ export const useDragAndDrop = () => {
   const dropIndex = ref<number>(-1);
   const dragState = ref<DragState | null>(null);
   const dragSource = ref<'grid' | 'storage' | null>(null);
+  const isDragging = ref(false);
+  const isDragOverStorage = ref(false);
   const dragSize = ref<{ width: number; height: number } | null>(null);
   const originRect = ref<{ left: number; top: number; width: number; height: number } | null>(null);
   const animateTarget = ref<{ left: number; top: number } | null>(null);
@@ -203,6 +205,13 @@ export const useDragAndDrop = () => {
   };
 
   const startDrag = (card: BentoCard, event: MouseEvent | TouchEvent, source: 'grid' | 'storage' = 'grid') => {
+    // 串行处理：检查是否已有拖放操作
+    if (isDragging.value) {
+      console.warn('[DND] Another drag operation in progress, ignoring');
+      return;
+    }
+    
+    isDragging.value = true;
     draggedCard.value = card;
     dragSource.value = source;
     
@@ -348,6 +357,8 @@ export const useDragAndDrop = () => {
   };
 
   const endDrag = () => {
+    isDragging.value = false;
+    isDragOverStorage.value = false;
     if (!draggedCard.value) {
       draggedCard.value = null;
       dropTarget.value = null;
@@ -544,9 +555,14 @@ export const useDragAndDrop = () => {
     dropIndex,
     dragState,
     dragSource: computed(() => dragSource.value),
+    isDragging: computed(() => isDragging.value),
+    isDragOverStorage: computed(() => isDragOverStorage.value),
     startDrag,
     updateDrag,
     endDrag,
+    setDragOverStorage: (value: boolean) => {
+      isDragOverStorage.value = value;
+    },
     getDragStyles,
     getDropTargetStyles,
     getOriginGhostStyles,

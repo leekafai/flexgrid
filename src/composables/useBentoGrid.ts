@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import type { BentoCard, BentoGrid, BentoGridRow, CardSize } from '@/types/bento';
+import { collidesAt, findValidPosition } from '@/utils/bentoGridUtils';
 
 export const useBentoGrid = () => {
   const grid = ref<BentoGrid>({
@@ -88,6 +89,129 @@ export const useBentoGrid = () => {
       }
     }
     ensureReservedRowsFromCards();
+  };
+
+  /**
+   * 在网格中放置卡片，支持指定坐标或自动计算不覆盖的位置
+   * @param card 要放置的卡片（不包含 id）
+   * @param position 可选的位置坐标，如果不提供则自动计算
+   * @param animateFrom 可选的动画起始位置（像素坐标），如果提供则创建从该位置到目标位置的动画
+   * @returns 返回实际放置的位置坐标和卡片 id
+   */
+  const placeCard = (
+    card: Omit<BentoCard, 'id'>,
+    position?: { x?: number; y?: number },
+    animateFrom?: { x: number; y: number }
+  ): { x: number; y: number; cardId: string } => {
+    const columns = grid.value.columns;
+    let finalPosition: { x: number; y: number };
+
+    if (position && position.x !== undefined && position.y !== undefined) {
+      // 如果提供了位置，先检查是否冲突
+      const testCard: BentoCard = {
+        ...card,
+        id: 'temp-id',
+        position: { x: position.x, y: position.y }
+      };
+      
+      if (!collidesAt(testCard, { x: position.x, y: position.y }, grid.value.cards)) {
+        // 位置可用，直接使用
+        finalPosition = { x: position.x, y: position.y };
+      } else {
+        // 位置冲突，自动查找不冲突的位置
+        const validPos = findValidPosition(
+          testCard,
+          position.x,
+          position.y,
+          grid.value.cards,
+          columns,
+          200 // maxAttempts
+        );
+        
+        if (validPos) {
+          finalPosition = validPos;
+        } else {
+          // 如果找不到有效位置，从指定位置开始向下查找
+          finalPosition = { x: position.x, y: position.y };
+          // 继续向下查找，直到找到不冲突的位置
+          for (let y = position.y; y < position.y + 100; y++) {
+            const testPos = { x: position.x, y };
+            if (!collidesAt(testCard, testPos, grid.value.cards)) {
+              finalPosition = testPos;
+              break;
+            }
+          }
+        }
+      }
+    } else {
+      // 没有提供位置，自动计算一个不覆盖的位置
+      const testCard: BentoCard = {
+        ...card,
+        id: 'temp-id',
+        position: { x: 0, y: 0 }
+      };
+      
+      const validPos = findValidPosition(
+        testCard,
+        0,
+        0,
+        grid.value.cards,
+        columns,
+        200 // maxAttempts
+      );
+      
+      if (validPos) {
+        finalPosition = validPos;
+      } else {
+        // 如果找不到有效位置，使用默认位置 (0, 0)
+        finalPosition = { x: 0, y: 0 };
+      }
+    }
+
+    // 使用计算出的位置添加卡片
+    const newCard: BentoCard = {
+      ...card,
+      id: `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+      rowIndex: card.rowIndex ?? grid.value.rows?.length ?? 0,
+      position: finalPosition
+    };
+    
+    grid.value.cards.push(newCard);
+    
+    // 更新行结构
+    if (grid.value.rows) {
+      const targetRow = grid.value.rows.find(row => row.index === newCard.rowIndex);
+      if (targetRow) {
+        targetRow.cards.push(newCard);
+        targetRow.cards.sort((a, b) => a.position.x - b.position.x);
+      } else {
+        // 创建新行
+        grid.value.rows.push({
+          id: `row-${newCard.rowIndex}`,
+          index: newCard.rowIndex!,
+          cards: [newCard]
+        });
+        grid.value.rows.sort((a, b) => a.index - b.index);
+      }
+    }
+    ensureReservedRowsFromCards();
+
+    // 如果需要动画，触发动画事件
+    if (animateFrom) {
+      // 延迟触发，确保 DOM 已更新
+      setTimeout(() => {
+        const event = new CustomEvent('card-placed-with-animation', {
+          detail: {
+            cardId: newCard.id,
+            from: animateFrom,
+            to: finalPosition
+          }
+        });
+        document.dispatchEvent(event);
+      }, 0);
+    }
+
+    return { x: finalPosition.x, y: finalPosition.y, cardId: newCard.id };
   };
 
   const removeCard = (cardId: string) => {
@@ -321,6 +445,7 @@ export const useBentoGrid = () => {
     isDragging,
     draggedCard,
     addCard,
+    placeCard,
     removeCard,
     updateCard,
     moveCard,

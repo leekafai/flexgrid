@@ -5,14 +5,23 @@
     :class="{ 'floating-panel--collapsed': isCollapsed }"
   >
     <div class="floating-panel__content">
-      <!-- 暂存区域 - 图标触发，悬停展开 -->
+      <!-- 暂存区域 - 图标触发，点击展开 -->
       <div 
         class="floating-panel__storage"
-        @mouseenter="isStorageExpanded = true"
-        @mouseleave="isStorageExpanded = false"
       >
         <!-- 图标触发位置 -->
-        <div class="floating-panel__storage-trigger">
+        <div 
+          class="floating-panel__storage-trigger"
+          :class="{ 
+            'floating-panel__storage-trigger--drag-over': isDragOverStorageLocal,
+            'floating-panel__storage-trigger--full': isFull && isDragOverStorageLocal
+          }"
+          @click="toggleStorageExpanded"
+          @dragover.prevent="handleDragOver"
+          @dragenter.prevent="handleDragEnter"
+          @dragleave="handleDragLeave"
+          @drop.prevent="handleDropFromGrid"
+        >
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
             <rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/>
             <path d="M9 9h6M9 15h6M9 12h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
@@ -23,8 +32,19 @@
         <!-- 展开的卡片列表 -->
         <div 
           class="floating-panel__storage-expanded"
-          :class="{ 'floating-panel__storage-expanded--visible': isStorageExpanded }"
+          :class="{ 'floating-panel__storage-expanded--visible': isStorageExpanded || isDragOverStorageLocal }"
+          @dragover.prevent="handleDragOver"
+          @dragenter.prevent="handleDragEnter"
+          @dragleave="handleDragLeave"
+          @drop.prevent="handleDropFromGrid"
         >
+          <!-- 提示文本 -->
+          <div v-if="isDragOverStorageLocal && !isFull" class="floating-panel__drop-hint">
+            释放以暂存
+          </div>
+          <div v-else-if="isDragOverStorageLocal && isFull" class="floating-panel__drop-hint floating-panel__drop-hint--error">
+            暂存区已满（最多 10 张）
+          </div>
           <div class="floating-panel__storage-header">
             <span class="floating-panel__title-small">暂存 ({{ storedCardsCount }})</span>
           </div>
@@ -34,6 +54,7 @@
               :key="card.id"
               class="floating-panel__stored-card"
               :class="{ 'floating-panel__stored-card--dragging': isDraggingFromStorage && draggedCard?.id === card.id }"
+              :data-card-id="card.id"
               draggable="true"
               @dragstart="handleDragStart(card, $event)"
               @dragend="handleDragEnd(card, false)"
@@ -149,6 +170,7 @@ const emit = defineEmits<{
   'add-card': [type: string];
   'drag-start': [card: StoredCard];
   'drag-end': [card: StoredCard, success: boolean];
+  'remove-card-from-grid': [cardId: string];
 }>();
 
 const { 
@@ -158,12 +180,16 @@ const {
   storedCardsCount,
   startDragFromStorage,
   endDragFromStorage,
-  isDraggingFromStorage
+  isDraggingFromStorage,
+  isFull,
+  canAcceptDrop,
+  addToStorage
 } = useFloatingPanel();
 
-const { draggedCard, updateDrag } = useDragAndDrop();
+const { draggedCard, updateDrag, dragSource, endDrag, isDragOverStorage, setDragOverStorage } = useDragAndDrop();
 const isCollapsed = ref(false);
 const isStorageExpanded = ref(false);
+const isDragOverStorageLocal = ref(false);
 
 const restoreCard = (card: BentoCard) => {
   // 如果正在拖放，取消拖放
@@ -245,6 +271,90 @@ const handleDragStart = (card: StoredCard, event: DragEvent) => {
 const handleDragEnd = (card: StoredCard, success: boolean) => {
   endDragFromStorage(success);
   emit('drag-end', card, success);
+};
+
+// 处理从网格拖放到暂存区
+const handleDragEnter = (e: DragEvent) => {
+  // 只处理从网格拖放的卡片
+  if (dragSource.value !== 'grid') return;
+  
+  // 阻止事件冒泡，防止网格也处理这个事件
+  e.stopPropagation();
+  
+  isDragOverStorageLocal.value = true;
+  isStorageExpanded.value = true;
+  
+  // 设置拖放效果
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = canAcceptDrop.value ? 'move' : 'none';
+  }
+  
+  // 更新拖放状态
+  if (setDragOverStorage) {
+    setDragOverStorage(true);
+  }
+};
+
+const handleDragOver = (e: DragEvent) => {
+  // 只处理从网格拖放的卡片
+  if (dragSource.value !== 'grid') return;
+  
+  // 阻止事件冒泡，防止网格也处理这个事件
+  e.stopPropagation();
+  
+  if (e.dataTransfer) {
+    e.dataTransfer.dropEffect = canAcceptDrop.value ? 'move' : 'none';
+  }
+};
+
+const handleDragLeave = (e: DragEvent) => {
+  // 检查是否真的离开了暂存区（不是进入子元素）
+  const relatedTarget = e.relatedTarget as HTMLElement;
+  const currentTarget = e.currentTarget as HTMLElement;
+  if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+    isDragOverStorageLocal.value = false;
+    if (setDragOverStorage) {
+      setDragOverStorage(false);
+    }
+  }
+};
+
+const handleDropFromGrid = (e: DragEvent) => {
+  // 阻止事件冒泡，防止 BentoGrid 也处理这个 drop 事件
+  e.stopPropagation();
+  
+  isDragOverStorageLocal.value = false;
+  if (setDragOverStorage) {
+    setDragOverStorage(false);
+  }
+  
+  // 只处理从网格拖放的卡片
+  if (dragSource.value !== 'grid' || !draggedCard.value) {
+    return;
+  }
+  
+  // 尝试添加到暂存区
+  const result = addToStorage(draggedCard.value);
+  if (result.success) {
+    // 从网格移除卡片 - 通过事件通知父组件
+    emit('remove-card-from-grid', draggedCard.value.id);
+    // 结束拖放
+    endDrag();
+  } else {
+    // 容量已满，提供视觉反馈
+    // 卡片会自动返回网格（由拖放系统处理）
+    endDrag();
+  }
+};
+
+// 切换收纳列表展开/收起状态
+const toggleStorageExpanded = () => {
+  // 如果正在拖放，不切换状态
+  if (isDragOverStorageLocal.value) {
+    return;
+  }
+  isStorageExpanded.value = !isStorageExpanded.value;
+  console.log('收纳列表展开状态:', isStorageExpanded.value);
 };
 
 // 监听全局点击事件，处理拖放过程中的按钮点击
@@ -360,6 +470,46 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   line-height: 1;
+  z-index: 10;
+}
+
+/* 拖放悬停状态 */
+.floating-panel__storage-trigger--drag-over {
+  background: #f0f9ff;
+  border-color: #3b82f6;
+  transform: scale(1.05);
+}
+
+/* 容量已满状态 */
+.floating-panel__storage-trigger--full {
+  background: #fef2f2;
+  border-color: #ef4444;
+  animation: flash 0.5s ease-in-out;
+}
+
+@keyframes flash {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 提示文本 */
+.floating-panel__drop-hint {
+  position: absolute;
+  top: -30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: #3b82f6;
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1002;
+}
+
+.floating-panel__drop-hint--error {
+  background: #ef4444;
 }
 
 .floating-panel__storage-expanded {

@@ -3,6 +3,8 @@
 Auto-generated from all feature plans. Last updated: 2025-12-09
 
 ## Active Technologies
+- TypeScript 5.3.3, Vue 3.4.15 + Vue 3 Composition API, Vite 5.0.12, Tailwind CSS 3.4.1 (002-staging-area-improvements)
+- 内存存储（会话级别），使用 Vue ref 管理状态 (002-staging-area-improvements)
 
 - TypeScript 5.3.3, Vue 3.4.15 + Vue 3 Composition API, Tailwind CSS 3.4.1, Vite 5.0.12 (001-improve-floating-panel)
 
@@ -22,6 +24,7 @@ npm test && npm run lint
 TypeScript 5.3.3, Vue 3.4.15: Follow standard conventions
 
 ## Recent Changes
+- 002-staging-area-improvements: Added TypeScript 5.3.3, Vue 3.4.15 + Vue 3 Composition API, Vite 5.0.12, Tailwind CSS 3.4.1
 
 - 001-improve-floating-panel: Added TypeScript 5.3.3, Vue 3.4.15 + Vue 3 Composition API, Tailwind CSS 3.4.1, Vite 5.0.12
 

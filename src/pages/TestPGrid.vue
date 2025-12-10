@@ -33,6 +33,7 @@
       @restore-card="handleRestoreCard"
       @remove-stored-card="handleRemoveStoredCard"
       @add-card="handleAddCard"
+      @remove-card-from-grid="handleRemoveCardFromGrid"
     />
   </div>
 </template>
@@ -102,20 +103,44 @@ const handleStoreCard = (card: BentoCard) => {
 };
 
 const handleRestoreCard = (card: BentoCard) => {
+  // 先获取收纳列表中卡片的位置（像素坐标），在移除之前
+  const storageCardElement = document.querySelector(`.floating-panel__stored-card[data-card-id="${card.id}"]`) as HTMLElement;
+  let animateFrom: { x: number; y: number } | undefined;
+  
+  if (storageCardElement) {
+    const rect = storageCardElement.getBoundingClientRect();
+    // 获取卡片中心位置
+    animateFrom = {
+      x: rect.left + rect.width / 2,
+      y: rect.top + rect.height / 2
+    };
+  }
+  
   // 从收纳区恢复卡片到网格
   const restoredCard = removeFromStorage(card.id);
-  if (restoredCard) {
-    // 添加到网格的末尾
-    gridRef.value?.addCard({
-      ...restoredCard,
-      position: { x: 0, y: restoredCard.position?.y || grid.value.cards.length }
-    });
+  if (restoredCard && gridRef.value) {
+    // 使用 placeCard API 自动计算不覆盖的位置
+    // 如果卡片有原始位置，尝试使用原始位置；否则自动计算
+    const originalPosition = restoredCard.position;
+    // 从 restoredCard 中移除 id，因为 placeCard 会生成新的 id
+    const { id, ...cardWithoutId } = restoredCard;
+    const placedPosition = gridRef.value.placeCard(
+      cardWithoutId,
+      originalPosition ? { x: originalPosition.x, y: originalPosition.y } : undefined,
+      animateFrom
+    );
+    console.log('卡片已恢复到网格，位置:', placedPosition);
   }
 };
 
 const handleRemoveStoredCard = (cardId: string) => {
   // 从收纳区删除卡片
   removeFromStorage(cardId);
+};
+
+const handleRemoveCardFromGrid = (cardId: string) => {
+  // 从网格移除卡片（拖放到暂存区时）
+  gridRef.value?.removeCard(cardId);
 };
 
 const handleAddCard = (type: string) => {

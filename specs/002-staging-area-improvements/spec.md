@@ -5,6 +5,11 @@
 **Status**: Draft  
 **Input**: User description: "拖拽过去暂存区，暂存列表会短暂出现。但是当我松开鼠标之后，无法放入暂存区。请完善暂存区的功能：1.暂存图标中要有数字角标；2.完整实现暂存逻辑；3.优化拖拽暂存以及从暂存恢复到网格的功能。"
 
+**Updated**: 2025-12-09 - 新增交互方式澄清：
+- 收纳卡片通过卡片右上角的按钮进行（收纳=暂存）
+- 点击浮动面板的收纳图标时，让收纳列表出现（点击展开，点击关闭）
+- 支持从收纳列表中拖拽卡片回到网格中
+
 ## Clarifications
 
 ### Session 2025-12-09
@@ -14,6 +19,9 @@
 - Q: 当用户同时进行多个拖放操作（例如快速连续拖动多张卡片）时，系统应如何处理？ → A: 串行处理，一次只允许一个拖放操作，新的拖放尝试被阻止直到当前操作完成
 - Q: 当用户拖动网格卡片到暂存区时，应提供什么形式的视觉反馈？ → A: 组合反馈：高亮暂存区图标 + 显示提示文本 + 改变鼠标样式
 - Q: 当用户拖动卡片到暂存区图标和展开列表的边界区域时，系统如何判断拖放目标？ → A: 图标和展开列表都接受拖放，任一区域都可触发暂存
+- Q: 收纳列表的展开方式是什么？ → A: 点击收纳图标展开列表，再次点击收纳图标关闭列表（点击切换展开/收起状态）
+- Q: 收纳卡片的方式是什么？ → A: 通过卡片右上角的收纳按钮进行收纳（收纳=暂存）
+- Q: 是否支持从收纳列表拖拽卡片回到网格？ → A: 是，支持从收纳列表中拖拽卡片回到网格中
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -89,7 +97,9 @@
 - **FR-002**: System MUST hide the badge when storage area is empty
 - **FR-003**: System MUST update the badge count immediately when cards are added to or removed from storage
 - **FR-004**: System MUST allow users to drag cards from grid to storage area icon or expanded storage list, with both areas accepting drop operations
-- **FR-005**: System MUST automatically expand storage list when user drags grid card over storage icon
+- **FR-004a**: System MUST allow users to store cards by clicking the store button in the top right corner of cards (store = stage)
+- **FR-005**: System MUST expand storage list when user clicks the storage icon (toggle expand/collapse on click)
+- **FR-005a**: System MUST automatically expand storage list when user drags grid card over storage icon (for drag-and-drop convenience)
 - **FR-006**: System MUST provide visual feedback when dragging card over storage area, including: highlighting storage icon (background/border change), displaying hint text (e.g., "释放以暂存"), and changing cursor style to indicate drop capability
 - **FR-007**: System MUST successfully store card in storage area when user drops grid card onto storage area
 - **FR-008**: System MUST remove card from grid after successful drop onto storage area

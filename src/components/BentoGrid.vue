@@ -44,6 +44,7 @@ const {
   isDragging, 
   draggedCard, 
   addCard, 
+  placeCard,
   removeCard, 
   updateCard, 
   startDrag, 
@@ -74,7 +75,8 @@ const {
   dragState,
   getOriginGhostStyles, 
   startDrag: startDragDnd,
-  dragSource
+  dragSource,
+  isDragOverStorage
 } = useDragAndDrop();
 
 const { getCardAnimationStyles, createIntersectionObserver } = useBentoAnimations();
@@ -259,6 +261,7 @@ const collidesAt = (card: BentoCardType, pos: { x: number; y: number }) => {
 
 // Expose methods for parent components
 defineExpose({
+  placeCard,
   addCard,
   removeCard,
   saveLayout,
@@ -858,6 +861,24 @@ const handleDragEnter = (e: DragEvent) => {
 
 const handleDrop = (e: DragEvent) => {
   if (!draggedCard.value) return;
+  
+  // 检查是否在暂存区上方，如果是则让暂存区处理，网格不处理
+  if (isDragOverStorage.value && dragSource.value === 'grid') {
+    console.log('[Grid] Drop over storage area, letting FloatingPanel handle it');
+    return;
+  }
+  
+  // 双重检查：如果 drop 事件的目标在暂存区内，也让暂存区处理
+  const target = e.target as HTMLElement;
+  const isOverStorageElement = target.closest('.floating-panel__storage') !== null || 
+                                target.closest('.floating-panel__storage-trigger') !== null ||
+                                target.closest('.floating-panel__storage-expanded') !== null;
+  
+  if (isOverStorageElement && dragSource.value === 'grid') {
+    console.log('[Grid] Drop target is storage area, letting FloatingPanel handle it');
+    return;
+  }
+  
   if (hasPlacedOnce.value) {
     console.log('[Place] drop skipped due to prior mouseup placement');
     return;
@@ -980,6 +1001,81 @@ const handleDrop = (e: DragEvent) => {
 };
 
 // Initialize with some demo cards
+// 处理从收纳列表恢复卡片的动画
+const handleCardPlacedWithAnimation = (event: CustomEvent) => {
+  const { cardId, from, to } = event.detail;
+  
+  // 延迟执行，确保 DOM 已更新
+  setTimeout(() => {
+    const el = gridEl.value?.querySelector(`.bento-grid__card[data-id="${cardId}"]`) as HTMLElement | null;
+    if (!el || !gridEl.value) return;
+
+    const card = grid.value.cards.find(c => c.id === cardId);
+    if (!card) return;
+
+    // 获取卡片实际位置（中心点）
+    const cardRect = el.getBoundingClientRect();
+    const targetX = cardRect.left + cardRect.width / 2;
+    const targetY = cardRect.top + cardRect.height / 2;
+
+    // 计算偏移量（从收纳列表中心到网格卡片中心）
+    const dx = from.x - targetX;
+    const dy = from.y - targetY;
+    const distance = Math.hypot(dx, dy);
+    
+    // 根据距离计算动画时长（最小400ms，最大900ms）
+    const duration = Math.max(400, Math.min(900, Math.round((distance / 1000) * 1000)));
+
+    // 设置动画
+    animSuppressMove.value.add(cardId);
+    animations.value.set(cardId, { duration, easing: 'cubic-bezier(.2,.8,.2,1)' });
+    
+    // 初始状态：从收纳列表位置开始，模拟高处（较大缩放和阴影）
+    el.style.transition = 'none';
+    el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.03)`;
+    el.style.boxShadow = '0 18px 40px rgba(15, 23, 42, 0.18)';
+    el.style.opacity = '0.95';
+    el.style.zIndex = '1000';
+    el.style.willChange = 'transform, box-shadow, opacity';
+    el.style.pointerEvents = 'none';
+
+    // 触发动画：移动到目标位置，缩放和阴影减小
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.transition = `transform ${duration}ms cubic-bezier(.2,.8,.2,1), box-shadow ${duration}ms cubic-bezier(.2,.8,.2,1), opacity ${duration}ms cubic-bezier(.2,.8,.2,1)`;
+        el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
+        el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
+        el.style.opacity = '1';
+      });
+    });
+
+    // 添加回弹效果：先压缩再弹回
+    setTimeout(() => {
+      el.style.transition = 'none';
+      el.style.transform = 'translate3d(0, 0, 0) scale(0.98)';
+      el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0)';
+      requestAnimationFrame(() => {
+        el.style.transition = 'transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 140ms cubic-bezier(0.34, 1.56, 0.64, 1)';
+        el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
+        el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
+      });
+    }, duration + 10);
+
+    // 动画结束后清理
+    setTimeout(() => {
+      el.style.transition = '';
+      el.style.transform = '';
+      el.style.boxShadow = '';
+      el.style.opacity = '';
+      el.style.zIndex = '';
+      el.style.willChange = '';
+      el.style.pointerEvents = '';
+      animSuppressMove.value.delete(cardId);
+      animations.value.delete(cardId);
+    }, duration + 10 + 160 + 20);
+  }, 10);
+};
+
 onMounted(() => {
   // 初始化行结构
   if (grid.value.rows && grid.value.rows.length === 0 && grid.value.cards.length > 0) {
@@ -1006,12 +1102,17 @@ onMounted(() => {
   
   setViewportGridBounds(gridEl.value);
   loadLayout(props.storageKey);
+  
+  // 监听卡片放置动画事件
+  document.addEventListener('card-placed-with-animation', handleCardPlacedWithAnimation as EventListener);
 });
 
 onUnmounted(() => {
   const ro = (grid as any)._ro as ResizeObserver | undefined;
   if (ro && gridEl.value) ro.unobserve(gridEl.value);
   hasPlacedOnce.value = false;
+  // 移除卡片放置动画事件监听器
+  document.removeEventListener('card-placed-with-animation', handleCardPlacedWithAnimation as EventListener);
 });
 </script>
 
