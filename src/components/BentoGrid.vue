@@ -73,7 +73,8 @@ const {
   dropRect, 
   dragState,
   getOriginGhostStyles, 
-  startDrag: startDragDnd 
+  startDrag: startDragDnd,
+  dragSource
 } = useDragAndDrop();
 
 const { getCardAnimationStyles, createIntersectionObserver } = useBentoAnimations();
@@ -607,6 +608,25 @@ const handleDragStart = (card: BentoCardType, event: MouseEvent | TouchEvent) =>
         applyAnimations({ animations: [{ cardId: draggedCard.value.id, type: 'translate', duration: 300, easing: 'cubic-bezier(.2,.8,.2,1)', from: draggedCard.value.position, to: intended }] } as any)
         if (!animations.value.has(draggedCard.value.id)) moveCard(draggedCard.value.id, intended)
       }
+      // 处理来自存储的拖放
+      if (dragSource.value === 'storage' && draggedCard.value && !reverted) {
+        // 从存储区域拖放的卡片需要添加到网格
+        const cardToAdd = { ...draggedCard.value, position: intended };
+        addCard(cardToAdd);
+        console.log('[Storage] Card added to grid from storage:', cardToAdd.id);
+        // 通知 FloatingPanel 拖放成功
+        const floatingPanelEvent = new CustomEvent('storage-card-dropped', { 
+          detail: { cardId: cardToAdd.id, success: true } 
+        });
+        document.dispatchEvent(floatingPanelEvent);
+      } else if (dragSource.value === 'storage' && reverted) {
+        // 避让失败，通知 FloatingPanel 取消拖放
+        const floatingPanelEvent = new CustomEvent('storage-card-dropped', { 
+          detail: { cardId: draggedCard.value?.id, success: false } 
+        });
+        document.dispatchEvent(floatingPanelEvent);
+      }
+      
       endDrag();
       if (gridEl.value && !reverted) {
         const ctx = {

@@ -1,10 +1,11 @@
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { BentoCard, BentoGridRow, CardSize } from '@/types/bento';
 
 export interface DragState {
   targetRowIndex: number;
   targetCardIndex: number;
   dropRow?: BentoGridRow;
+  dragSource?: 'grid' | 'storage' | null;
 }
 
 export const useDragAndDrop = () => {
@@ -16,6 +17,7 @@ export const useDragAndDrop = () => {
   const dropRect = ref<{ left: number; top: number; width: number; height: number; rowIndex?: number } | null>(null);
   const dropIndex = ref<number>(-1);
   const dragState = ref<DragState | null>(null);
+  const dragSource = ref<'grid' | 'storage' | null>(null);
   const dragSize = ref<{ width: number; height: number } | null>(null);
   const originRect = ref<{ left: number; top: number; width: number; height: number } | null>(null);
   const animateTarget = ref<{ left: number; top: number } | null>(null);
@@ -200,42 +202,73 @@ export const useDragAndDrop = () => {
     };
   };
 
-  const startDrag = (card: BentoCard, event: MouseEvent | TouchEvent) => {
+  const startDrag = (card: BentoCard, event: MouseEvent | TouchEvent, source: 'grid' | 'storage' = 'grid') => {
     draggedCard.value = card;
+    dragSource.value = source;
     
     const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
     const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
     
     pointerPos.value = { x: clientX, y: clientY };
-    console.log('[DND] dnd.startDrag', { id: card.id, clientX, clientY });
+    console.log('[DND] dnd.startDrag', { id: card.id, source, clientX, clientY });
     lastUpdateTs.value = performance.now();
     startInertia();
-    const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
-    if (gridElement) {
-      const el = gridElement.querySelector(`.bento-grid__card[data-id="${card.id}"]`) as HTMLElement | null;
-      if (el) {
-        const containerRect = gridElement.getBoundingClientRect();
-        const r = el.getBoundingClientRect();
-        originRect.value = {
-          left: r.left - containerRect.left,
-          top: r.top - containerRect.top,
-          width: r.width,
-          height: r.height
-        };
-        const w = el.offsetWidth;
-        const h = el.offsetHeight;
-        dragSize.value = { width: w, height: h };
-        dragOffset.value = {
-          x: clientX - r.left,
-          y: clientY - r.top
-        };
-        console.log('[DND] originRect', originRect.value);
-        dropRect.value = {
-          left: originRect.value.left,
-          top: originRect.value.top,
-          width: originRect.value.width,
-          height: originRect.value.height
-        };
+    
+    if (source === 'storage') {
+      // 对于存储卡片，需要从存储卡片元素获取尺寸
+      const storageCardEl = (event.target as HTMLElement).closest('.floating-panel__stored-card') as HTMLElement | null;
+      if (storageCardEl) {
+        const r = storageCardEl.getBoundingClientRect();
+        const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
+        if (gridElement) {
+          const containerRect = gridElement.getBoundingClientRect();
+          const u = getUnitsForCard(card);
+          const unit = 89; // 默认单位，实际应从 grid 获取
+          const gap = 16; // 默认间距
+          const cardWidth = u.w * unit + (u.w - 1) * gap;
+          const cardHeight = u.h * unit + (u.h - 1) * gap;
+          dragSize.value = { width: cardWidth, height: cardHeight };
+          dragOffset.value = {
+            x: clientX - r.left,
+            y: clientY - r.top
+          };
+          dropRect.value = {
+            left: 0,
+            top: 0,
+            width: cardWidth,
+            height: cardHeight
+          };
+        }
+      }
+    } else {
+      // 原有逻辑：从网格卡片获取
+      const gridElement = document.querySelector('.bento-grid') as HTMLElement | null;
+      if (gridElement) {
+        const el = gridElement.querySelector(`.bento-grid__card[data-id="${card.id}"]`) as HTMLElement | null;
+        if (el) {
+          const containerRect = gridElement.getBoundingClientRect();
+          const r = el.getBoundingClientRect();
+          originRect.value = {
+            left: r.left - containerRect.left,
+            top: r.top - containerRect.top,
+            width: r.width,
+            height: r.height
+          };
+          const w = el.offsetWidth;
+          const h = el.offsetHeight;
+          dragSize.value = { width: w, height: h };
+          dragOffset.value = {
+            x: clientX - r.left,
+            y: clientY - r.top
+          };
+          console.log('[DND] originRect', originRect.value);
+          dropRect.value = {
+            left: originRect.value.left,
+            top: originRect.value.top,
+            width: originRect.value.width,
+            height: originRect.value.height
+          };
+        }
       }
     }
   };
@@ -322,6 +355,7 @@ export const useDragAndDrop = () => {
       dropRect.value = null;
       dragState.value = null;
       animateTarget.value = null;
+      dragSource.value = null;
       tilt.value = { x: 0, y: 0 };
       lastPointer.value = null;
       tiltZ.value = 0;
@@ -348,6 +382,7 @@ export const useDragAndDrop = () => {
       dropRect.value = null;
       dragState.value = null;
       animateTarget.value = null;
+      dragSource.value = null;
       tilt.value = { x: 0, y: 0 };
       lastPointer.value = null;
       tiltZ.value = 0;
@@ -508,6 +543,7 @@ export const useDragAndDrop = () => {
     dropRect,
     dropIndex,
     dragState,
+    dragSource: computed(() => dragSource.value),
     startDrag,
     updateDrag,
     endDrag,

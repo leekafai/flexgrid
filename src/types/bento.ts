@@ -78,3 +78,9 @@ export interface BentoCardProps {
   shadowStrength?: number;
   interactive?: boolean;
 }
+
+export interface StorageDragState {
+  draggedStorageCard: BentoCard | null;
+  isDraggingFromStorage: boolean;
+  storageDragOrigin?: string;
+}
