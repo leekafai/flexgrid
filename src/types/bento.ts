@@ -1,3 +1,17 @@
+export interface PositionConflict {
+  id: string;
+  cardId: string;
+  type: 'overlap' | 'out_of_bounds' | 'invalid_coordinate';
+  severity: 'low' | 'medium' | 'high';
+  description: string;
+  conflictingCards: string[];
+  suggestedFix?: {
+    newPosition: { x: number; y: number };
+    reason: string;
+  };
+  detectedAt: string;
+}
+
 export interface BentoCard {
   id: string;
   type: string;
@@ -15,6 +29,10 @@ export interface BentoCard {
   interactive?: boolean;
   animation?: 'fade' | 'slide' | 'scale' | 'bounce';
   rowIndex?: number; // 新增：卡片所在的行索引
+  // 新增：验证相关字段
+  validationStatus?: 'pending' | 'valid' | 'invalid' | 'fixed';
+  originalPosition?: { x: number; y: number };
+  conflictInfo?: PositionConflict;
 }
 
 export interface BentoGridRow {

@@ -1,6 +1,7 @@
 import { ref, computed } from 'vue';
 import type { BentoCard, BentoGrid, BentoGridRow, CardSize } from '@/types/bento';
 import { collidesAt, findValidPosition } from '@/utils/bentoGridUtils';
+// import { bentoGridValidationService } from '@/services/BentoGridValidationService';
 
 export const useBentoGrid = () => {
   const grid = ref<BentoGrid>({
@@ -21,6 +22,20 @@ export const useBentoGrid = () => {
   const isDragging = ref(false);
   const draggedCard = ref<BentoCard | null>(null);
   const dragOffset = ref({ x: 0, y: 0 });
+
+  // 新增：验证相关状态
+  const isValidating = ref(false);
+  const validationErrors = ref<string[]>([]);
+  const validationWarnings = ref<string[]>([]);
+  
+  // 新增：实时进度指示器状态
+  const validationProgress = ref({
+    percentage: 0,
+    currentPhase: '',
+    processedCards: 0,
+    totalCards: 0,
+    estimatedTimeRemaining: 0
+  });
 
   // 初始化网格行结构
   const initializeRows = () => {
@@ -447,10 +462,95 @@ export const useBentoGrid = () => {
     } catch {}
   };
 
+  // 新增：JSON数据加载和验证功能
+  // const loadJsonData = async (jsonData: any, options?: any) => {
+  //   isValidating.value = true;
+  //   validationErrors.value = [];
+  //   validationWarnings.value = [];
+    
+  //   // 重置进度
+  //   validationProgress.value = {
+  //     percentage: 0,
+  //     currentPhase: '初始化',
+  //     processedCards: 0,
+  //     totalCards: 0,
+  //     estimatedTimeRemaining: 0
+  //   };
+
+  //   try {
+  //     // 解析JSON数据为BentoCard数组
+  //     const bentoCards = bentoGridValidationService.parseJsonToBentoCards(jsonData);
+      
+  //     if (bentoCards.length === 0) {
+  //       throw new Error('JSON数据中未找到有效的卡片数据');
+  //     }
+      
+  //     // 更新总卡片数
+  //     validationProgress.value.totalCards = bentoCards.length;
+  //     validationProgress.value.currentPhase = '解析数据';
+  //     validationProgress.value.percentage = 10;
+
+  //     const result = await bentoGridValidationService.loadJsonData(jsonData, {
+  //       ...options,
+  //       onProgress: (progress: any) => {
+  //         // 更新进度
+  //         validationProgress.value = {
+  //           ...validationProgress.value,
+  //           percentage: progress.percentage || 0,
+  //           currentPhase: progress.phase || '验证中',
+  //           processedCards: progress.processedCards || 0,
+  //           estimatedTimeRemaining: progress.estimatedTimeRemaining || 0
+  //         };
+  //       }
+  //     });
+      
+  //     // 更新验证状态
+  //     validationErrors.value = result.errors;
+  //     validationWarnings.value = result.warnings;
+      
+  //     // 完成进度
+  //     validationProgress.value.percentage = 100;
+  //     validationProgress.value.currentPhase = '完成';
+      
+  //     // 如果验证成功，更新网格数据
+  //     if (result.isValid) {
+  //       grid.value.cards = result.fixedCards;
+  //       initializeRows();
+  //       ensureReservedRowsFromCards();
+  //     }
+      
+  //     return result;
+  //   } catch (error) {
+  //     validationErrors.value.push(error instanceof Error ? error.message : String(error));
+  //     validationProgress.value.currentPhase = '错误';
+  //     throw error;
+  //   } finally {
+  //     isValidating.value = false;
+  //   }
+  // };
+
+  // 新增：验证当前网格状态
+  // const validateCurrentGrid = async () => {
+  //   return await bentoGridValidationService.validateCurrentGrid();
+  // };
+
+  // 新增：清除验证结果
+  const clearValidationResults = () => {
+    validationErrors.value = [];
+    validationWarnings.value = [];
+    // bentoGridValidationService.clearValidationResult();
+  };
+
   return {
     grid,
     isDragging,
     draggedCard,
+    // 新增：验证相关状态
+    isValidating,
+    validationErrors,
+    validationWarnings,
+    // 新增：实时进度指示器状态
+    validationProgress,
     addCard,
     placeCard,
     removeCard,
@@ -468,6 +568,10 @@ export const useBentoGrid = () => {
     expandRowsForBottom,
     addRow,
     moveCardToRow,
-    initializeRows
+    initializeRows,
+    // 新增：JSON加载和验证功能
+    // loadJsonData,
+    // validateCurrentGrid,
+    clearValidationResults
   };
 };
