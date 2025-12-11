@@ -1,7 +1,7 @@
-# Specification Quality Checklist: 完善暂存区功能
+# Specification Quality Checklist: 优化卡片恢复动画流畅性
 
-**Purpose**: Validate specification completeness and quality before proceeding to planning
-**Created**: 2025-12-09
+**Purpose**: Validate specification completeness and quality before proceeding to planning  
+**Created**: 2025-12-09  
 **Feature**: [spec.md](../spec.md)
 
 ## Content Quality
@@ -31,10 +31,6 @@
 
 ## Notes
 
-- Specification is complete and ready for planning phase
-- All requirements are user-focused and testable
-- Success criteria are measurable and technology-agnostic
-- Edge cases cover common scenarios and error conditions
-- Dependencies and assumptions are clearly documented
+- All items pass validation. Specification is ready for `/speckit.clarify` or `/speckit.plan`.
 
 

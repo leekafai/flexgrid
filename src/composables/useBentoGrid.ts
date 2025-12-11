@@ -168,7 +168,29 @@ export const useBentoGrid = () => {
       }
     }
 
-    // 使用计算出的位置添加卡片
+    // 如果需要动画，使用延迟部署机制：不立即添加到网格，而是创建临时卡片状态
+    if (animateFrom) {
+      // 生成临时卡片ID
+      const tempCardId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      
+      // 触发动画事件，传递临时卡片数据（不包含ID）
+      setTimeout(() => {
+        const event = new CustomEvent('card-placed-with-animation', {
+          detail: {
+            cardId: tempCardId,
+            tempCard: card, // 不包含 id 的卡片数据
+            from: animateFrom,
+            to: finalPosition
+          }
+        });
+        document.dispatchEvent(event);
+      }, 0);
+      
+      // 返回临时卡片ID，不添加到网格
+      return { x: finalPosition.x, y: finalPosition.y, cardId: tempCardId };
+    }
+    
+    // 不需要动画时，正常添加卡片到网格
     const newCard: BentoCard = {
       ...card,
       id: `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
@@ -195,21 +217,6 @@ export const useBentoGrid = () => {
       }
     }
     ensureReservedRowsFromCards();
-
-    // 如果需要动画，触发动画事件
-    if (animateFrom) {
-      // 延迟触发，确保 DOM 已更新
-      setTimeout(() => {
-        const event = new CustomEvent('card-placed-with-animation', {
-          detail: {
-            cardId: newCard.id,
-            from: animateFrom,
-            to: finalPosition
-          }
-        });
-        document.dispatchEvent(event);
-      }, 0);
-    }
 
     return { x: finalPosition.x, y: finalPosition.y, cardId: newCard.id };
   };

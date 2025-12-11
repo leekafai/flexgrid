@@ -265,3 +265,4 @@ function validateDragStart(isDragging: boolean): { valid: boolean; reason?: stri
 }
 ```
 
+

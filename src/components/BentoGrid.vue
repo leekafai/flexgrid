@@ -28,7 +28,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, type CSSProperties } from 'vue';
+import { ref, computed, onMounted, onUnmounted, nextTick, type CSSProperties } from 'vue';
 import { useBentoGrid } from '@/composables/useBentoGrid';
 import { useDragAndDrop } from '@/composables/useDragAndDrop';
 import { useBentoAnimations } from '@/composables/useBentoAnimations';
@@ -38,6 +38,8 @@ import { createPluginManager } from '@/plugins/manager';
 import { avoidancePlugin } from '@/plugins/avoidance/index';
 import { placementPlugin } from '@/plugins/placement/index';
 import { attachPlacementObserver } from '@/debug/debugPlacementObserver';
+import { calculateBezierPosition, calculateControlPoint, easeInOutCubic, easeOutBounce } from '@/utils/bezierPath';
+import type { AnimationPosition } from '@/specs/003-restore-card-animation/contracts/restore-animation-interfaces';
 
 const { 
   grid, 
@@ -86,6 +88,16 @@ plugins.register(avoidancePlugin);
 plugins.register(placementPlugin);
 const animations = ref(new Map<string, { duration: number; easing: string }>());
 const animSuppressMove = ref(new Set<string>());
+// 临时卡片状态管理（用于延迟部署机制）
+const temporaryCards = ref(new Map<string, {
+  card: Omit<BentoCardType, 'id'>;
+  targetGridPosition: { x: number; y: number };
+  animationId: string;
+  createdAt: number;
+  element: HTMLElement | null;
+}>());
+// 正在部署的卡片ID（用于渐显效果）
+const deployingCards = ref(new Set<string>());
 const dropTargetVisible = ref(false);
 const dropShadowOpacity = ref(0);
 const dropShadowDropping = ref(false);
@@ -238,8 +250,12 @@ const getAnimStyles = (card: BentoCardType) => {
   const anim = animations.value.get(card.id);
   const base = 'transform 0.18s cubic-bezier(.2,.8,.2,1), box-shadow 0.18s cubic-bezier(.2,.8,.2,1)';
   const isDragged = draggedCard.value && draggedCard.value.id === card.id;
+  const isDeploying = deployingCards.value.has(card.id);
   const transition = anim ? (isDragged ? `transform ${anim.duration}ms ${anim.easing}, box-shadow ${anim.duration}ms ${anim.easing}` : `left ${anim.duration}ms ${anim.easing}, top ${anim.duration}ms ${anim.easing}, ${base}`) : base;
-  return { transition, willChange: 'left, top, transform' } as any;
+  const opacityTransition = isDeploying ? 'opacity 0.3s ease-out' : '';
+  const fullTransition = opacityTransition ? `${transition}, ${opacityTransition}` : transition;
+  const opacity = isDeploying ? 0 : 1;
+  return { transition: fullTransition, willChange: 'left, top, transform, opacity', opacity } as any;
 };
 
 const getDragStylesSafe = (card: BentoCardType) => {
@@ -257,6 +273,79 @@ const collidesAt = (card: BentoCardType, pos: { x: number; y: number }) => {
     if (rectOverlap(a, b)) return true;
   }
   return false;
+};
+
+/**
+ * 创建临时卡片元素（用于延迟部署机制）
+ * 临时卡片元素会被添加到 DOM，但不会添加到 grid.value.cards
+ */
+const createTempCardElement = (
+  tempCard: Omit<BentoCardType, 'id'>,
+  tempCardId: string,
+  targetPosition: { x: number; y: number }
+): HTMLElement | null => {
+  if (!gridEl.value) return null;
+
+  // 创建临时卡片容器
+  const tempElement = document.createElement('div');
+  tempElement.className = 'bento-grid__card bento-grid__card--temp';
+  tempElement.setAttribute('data-id', tempCardId);
+  tempElement.setAttribute('data-temp', 'true');
+
+  // 计算卡片样式
+  const units = getCardUnits(tempCard);
+  const unit = grid.value.unit ?? 89;
+  const gap = grid.value.gap;
+  const cardWidth = units.w * unit + (units.w - 1) * gap;
+  const cardHeight = units.h * unit + (units.h - 1) * gap;
+  const left = targetPosition.x * (unit + gap);
+  const top = targetPosition.y * (unit + gap);
+
+  // 设置基础样式
+  tempElement.style.position = 'absolute';
+  tempElement.style.left = `${left}px`;
+  tempElement.style.top = `${top}px`;
+  tempElement.style.width = `${cardWidth}px`;
+  tempElement.style.height = `${cardHeight}px`;
+  tempElement.style.pointerEvents = 'none';
+  tempElement.style.zIndex = '1000';
+
+  // 创建卡片内容（简化版本，用于动画显示）
+  const cardContent = document.createElement('div');
+  cardContent.className = 'bento-card';
+  cardContent.className += ` bento-card--${tempCard.size || 'wide'}`;
+  cardContent.className += ` bento-card--${tempCard.type || 'text'}`;
+  
+  // 设置卡片内容样式
+  if (tempCard.style) {
+    if (tempCard.style.backgroundColor) {
+      cardContent.style.backgroundColor = tempCard.style.backgroundColor;
+    }
+    if (tempCard.style.textColor) {
+      cardContent.style.color = tempCard.style.textColor;
+    }
+    if (tempCard.style.borderRadius) {
+      cardContent.style.borderRadius = tempCard.style.borderRadius;
+    }
+  }
+
+  // 添加卡片内容
+  const contentDiv = document.createElement('div');
+  contentDiv.className = 'bento-card__content';
+  const titleDiv = document.createElement('div');
+  titleDiv.className = 'bento-card__default-title';
+  titleDiv.textContent = tempCard.title || '';
+  const contentTextDiv = document.createElement('div');
+  contentTextDiv.className = 'bento-card__default-content';
+  if (typeof tempCard.content === 'string') {
+    contentTextDiv.textContent = tempCard.content;
+  }
+  contentDiv.appendChild(titleDiv);
+  contentDiv.appendChild(contentTextDiv);
+  cardContent.appendChild(contentDiv);
+  tempElement.appendChild(cardContent);
+
+  return tempElement;
 };
 
 // Expose methods for parent components
@@ -1001,68 +1090,402 @@ const handleDrop = (e: DragEvent) => {
 };
 
 // Initialize with some demo cards
-// 处理从收纳列表恢复卡片的动画
+// 处理从收纳列表恢复卡片的动画（使用贝塞尔曲线路径）
+// 支持多个并行动画，性能优化，边界情况处理
+// 延迟部署机制：卡片在动画期间保持临时状态，动画完成后才正式添加到网格
 const handleCardPlacedWithAnimation = (event: CustomEvent) => {
-  const { cardId, from, to } = event.detail;
+  const { cardId, tempCard, from, to } = event.detail;
   
-  // 延迟执行，确保 DOM 已更新
+  // 边界情况处理：验证必要数据
+  if (!tempCard || !gridEl.value) {
+    console.error('[Animation] Missing tempCard or gridEl');
+    return;
+  }
+  
+  if (!from || typeof from.x !== 'number' || typeof from.y !== 'number') {
+    console.error('[Animation] Invalid from position');
+    return;
+  }
+  
+  if (!to || typeof to.x !== 'number' || typeof to.y !== 'number') {
+    console.error('[Animation] Invalid to position');
+    return;
+  }
+
+  // 检查是否已有动画在进行（防止重复）
+  if (animSuppressMove.value.has(cardId)) {
+    console.warn('[Animation] Animation already in progress for cardId:', cardId);
+    return;
+  }
+  
+  // 检查是否已有临时卡片（防止重复创建）
+  if (temporaryCards.value.has(cardId)) {
+    console.warn('[Animation] Temporary card already exists for cardId:', cardId);
+    return;
+  }
+
+  // 创建临时卡片元素（不添加到 grid.value.cards）
+  const tempCardElement = createTempCardElement(tempCard, cardId, to);
+  if (!tempCardElement) {
+    console.error('[Animation] Failed to create temp card element');
+    return;
+  }
+
+  // 将临时卡片添加到 DOM（但不添加到 grid.value.cards）
+  gridEl.value.appendChild(tempCardElement);
+  
+  // 存储临时卡片状态
+  temporaryCards.value.set(cardId, {
+    card: tempCard,
+    targetGridPosition: to,
+    animationId: cardId,
+    createdAt: Date.now(),
+    element: tempCardElement
+  });
+
+  // 使用临时卡片元素进行动画
+  const el = tempCardElement;
+  
+  // 计算起点和终点（相对于网格容器）
+  const gridRect = gridEl.value.getBoundingClientRect();
+  
+  // 计算目标位置（网格坐标转换为像素坐标）
+  const units = getCardUnits(tempCard);
+  const unit = grid.value.unit ?? 89;
+  const gap = grid.value.gap;
+  const targetLeft = to.x * (unit + gap);
+  const targetTop = to.y * (unit + gap);
+  const targetWidth = units.w * unit + (units.w - 1) * gap;
+  const targetHeight = units.h * unit + (units.h - 1) * gap;
+  const targetX = gridRect.left + targetLeft + targetWidth / 2;
+  const targetY = gridRect.top + targetTop + targetHeight / 2;
+  
+  // 计算起点和终点（相对于网格容器）
+  const startPoint: AnimationPosition = {
+    x: from.x - gridRect.left,
+    y: from.y - gridRect.top
+  };
+  const endPoint: AnimationPosition = {
+    x: targetX - gridRect.left,
+    y: targetY - gridRect.top
+  };
+  
+  // 计算初始偏移量（从收纳列表位置到目标位置的偏移）
+  const initialOffsetX = startPoint.x - endPoint.x;
+  const initialOffsetY = startPoint.y - endPoint.y;
+  
+  // 立即设置初始状态，防止卡片闪烁到目标位置
+  // 卡片会先出现在收纳列表位置（通过 transform 偏移）
+  el.style.transition = 'none';
+  el.style.transform = `translate3d(${initialOffsetX}px, ${initialOffsetY}px, 0) scale(1.03)`;
+  el.style.boxShadow = '0 18px 40px rgba(15, 23, 42, 0.18)';
+  el.style.opacity = '0.95';
+  el.style.zIndex = '1000';
+  el.style.willChange = 'transform, box-shadow, opacity';
+  el.style.pointerEvents = 'none';
+  
+  // 定义动画使用的起点和终点（在 setTimeout 外部定义，以便在动画循环中访问）
+  let updatedStartPoint: AnimationPosition = startPoint;
+  let updatedEndPoint: AnimationPosition = endPoint;
+  
+  // 延迟执行，确保 DOM 已更新，然后开始动画
   setTimeout(() => {
-    const el = gridEl.value?.querySelector(`.bento-grid__card[data-id="${cardId}"]`) as HTMLElement | null;
-    if (!el || !gridEl.value) return;
-
-    const card = grid.value.cards.find(c => c.id === cardId);
-    if (!card) return;
-
-    // 获取卡片实际位置（中心点）
-    const cardRect = el.getBoundingClientRect();
-    const targetX = cardRect.left + cardRect.width / 2;
-    const targetY = cardRect.top + cardRect.height / 2;
-
-    // 计算偏移量（从收纳列表中心到网格卡片中心）
-    const dx = from.x - targetX;
-    const dy = from.y - targetY;
-    const distance = Math.hypot(dx, dy);
+    // 重新获取网格位置（可能因为滚动等原因变化）
+    const updatedGridRect = gridEl.value!.getBoundingClientRect();
     
-    // 根据距离计算动画时长（最小400ms，最大900ms）
+    // 重新计算目标位置
+    const updatedTargetLeft = to.x * (unit + gap);
+    const updatedTargetTop = to.y * (unit + gap);
+    const updatedTargetX = updatedGridRect.left + updatedTargetLeft + targetWidth / 2;
+    const updatedTargetY = updatedGridRect.top + updatedTargetTop + targetHeight / 2;
+    
+    // 更新终点位置
+    updatedEndPoint = {
+      x: updatedTargetX - updatedGridRect.left,
+      y: updatedTargetY - updatedGridRect.top
+    };
+    
+    // 更新起点位置（收纳列表位置相对于更新后的网格）
+    updatedStartPoint = {
+      x: from.x - updatedGridRect.left,
+      y: from.y - updatedGridRect.top
+    };
+
+    // 边界情况处理：检查目标位置是否在视口外
+    const viewport = {
+      left: 0,
+      top: 0,
+      right: window.innerWidth,
+      bottom: window.innerHeight
+    };
+    const targetInViewport = (
+      updatedTargetX >= viewport.left &&
+      updatedTargetX <= viewport.right &&
+      updatedTargetY >= viewport.top &&
+      updatedTargetY <= viewport.bottom
+    );
+
+    // 计算贝塞尔曲线控制点（使用更新后的位置）
+    const controlPoint = calculateControlPoint(updatedStartPoint, updatedEndPoint, 0.3);
+
+    // 计算距离和动画时长（最小400ms，最大900ms）
+    const dx = updatedEndPoint.x - updatedStartPoint.x;
+    const dy = updatedEndPoint.y - updatedStartPoint.y;
+    const distance = Math.hypot(dx, dy);
     const duration = Math.max(400, Math.min(900, Math.round((distance / 1000) * 1000)));
 
-    // 设置动画
+    // 性能优化：检测设备性能，低性能设备使用简化动画
+    const isLowPerformance = navigator.hardwareConcurrency && navigator.hardwareConcurrency < 4;
+    const useSimplifiedAnimation = isLowPerformance && !targetInViewport;
+
+    // 设置动画状态
     animSuppressMove.value.add(cardId);
     animations.value.set(cardId, { duration, easing: 'cubic-bezier(.2,.8,.2,1)' });
-    
-    // 初始状态：从收纳列表位置开始，模拟高处（较大缩放和阴影）
-    el.style.transition = 'none';
-    el.style.transform = `translate3d(${dx}px, ${dy}px, 0) scale(1.03)`;
-    el.style.boxShadow = '0 18px 40px rgba(15, 23, 42, 0.18)';
-    el.style.opacity = '0.95';
-    el.style.zIndex = '1000';
-    el.style.willChange = 'transform, box-shadow, opacity';
-    el.style.pointerEvents = 'none';
 
-    // 触发动画：移动到目标位置，缩放和阴影减小
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        el.style.transition = `transform ${duration}ms cubic-bezier(.2,.8,.2,1), box-shadow ${duration}ms cubic-bezier(.2,.8,.2,1), opacity ${duration}ms cubic-bezier(.2,.8,.2,1)`;
+    // 性能监控：记录动画开始时间
+    const animationStartTime = performance.now();
+    let frameCount = 0;
+    let lastFrameTime = animationStartTime;
+
+    // 动画状态
+    const startTime = performance.now();
+    let animationFrameId: number | null = null;
+    let isCompleting = false;
+    let isCancelled = false;
+
+    // 处理窗口调整大小和滚动：更新终点位置
+    const updateEndPoint = () => {
+      if (!el || !gridEl.value || isCancelled) return;
+      const newCardRect = el.getBoundingClientRect();
+      const newGridRect = gridEl.value.getBoundingClientRect();
+      const newTargetX = newCardRect.left + newCardRect.width / 2;
+      const newTargetY = newCardRect.top + newCardRect.height / 2;
+      
+      // 更新终点位置
+      updatedEndPoint.x = newTargetX - newGridRect.left;
+      updatedEndPoint.y = newTargetY - newGridRect.top;
+      
+      // 同时更新起点位置（收纳列表位置相对于更新后的网格）
+      updatedStartPoint.x = from.x - newGridRect.left;
+      updatedStartPoint.y = from.y - newGridRect.top;
+    };
+
+    // 监听窗口调整大小和滚动
+    const handleResize = () => updateEndPoint();
+    const handleScroll = () => updateEndPoint();
+    window.addEventListener('resize', handleResize, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
+
+    // 动画循环函数
+    const animate = (currentTime: number) => {
+      // 性能监控：计算帧率
+      frameCount++;
+      const frameDelta = currentTime - lastFrameTime;
+      lastFrameTime = currentTime;
+      
+      // 如果帧率过低（< 30fps），使用简化动画
+      if (frameDelta > 33 && !useSimplifiedAnimation) {
+        // 降级到简化动画
+        el.style.transition = `transform ${duration}ms cubic-bezier(.2,.8,.2,1)`;
         el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
         el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
         el.style.opacity = '1';
-      });
-    });
+        setTimeout(() => cleanup(), duration);
+        return;
+      }
 
-    // 添加回弹效果：先压缩再弹回
-    setTimeout(() => {
-      el.style.transition = 'none';
-      el.style.transform = 'translate3d(0, 0, 0) scale(0.98)';
-      el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0)';
-      requestAnimationFrame(() => {
-        el.style.transition = 'transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 140ms cubic-bezier(0.34, 1.56, 0.64, 1)';
-        el.style.transform = 'translate3d(0, 0, 0) scale(1.00)';
-        el.style.boxShadow = '0 8px 28px rgba(15, 23, 42, 0.04)';
-      });
-    }, duration + 10);
+      if (isCancelled) {
+        cleanup();
+        return;
+      }
 
-    // 动画结束后清理
-    setTimeout(() => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      if (progress < 1) {
+        // 主动画阶段：使用贝塞尔曲线路径（使用更新后的位置）
+        const easedProgress = easeInOutCubic(progress);
+        const bezierPos = calculateBezierPosition(easedProgress, updatedStartPoint, controlPoint, updatedEndPoint);
+        
+        // 计算相对于目标位置的偏移（使用更新后的终点位置）
+        const offsetX = bezierPos.x - updatedEndPoint.x;
+        const offsetY = bezierPos.y - updatedEndPoint.y;
+        
+        // 优化视觉反馈：根据速度曲线计算缩放和阴影
+        // 使用 easedProgress 确保平滑过渡
+        const scale = 1.03 - (0.03 * easedProgress);
+        
+        // 阴影过渡：从大阴影平滑过渡到小阴影，模拟高度变化
+        const shadowOpacity = 0.18 - (0.14 * easedProgress);
+        const shadowBlur = 40 - (32 * easedProgress);
+        const shadowYOffset = 18 - (10 * easedProgress); // Y 偏移量也平滑过渡
+        
+        // 透明度：从 0.95 平滑过渡到 1.00
+        const opacity = 0.95 + (0.05 * easedProgress);
+        
+        // 应用变换（使用更精确的阴影值）
+        el.style.transform = `translate3d(${offsetX}px, ${offsetY}px, 0) scale(${scale})`;
+        el.style.boxShadow = `0 ${shadowYOffset}px ${shadowBlur}px rgba(15, 23, 42, ${shadowOpacity})`;
+        el.style.opacity = String(opacity);
+
+        // 继续动画
+        animationFrameId = requestAnimationFrame(animate);
+      } else if (!isCompleting) {
+        // 主动画完成，开始回弹效果
+        isCompleting = true;
+        const bounceDuration = 140;
+        const bounceStartTime = currentTime;
+
+        const bounceAnimate = (bounceTime: number) => {
+          if (isCancelled) {
+            cleanup();
+            return;
+          }
+
+          const bounceElapsed = bounceTime - bounceStartTime;
+          const bounceProgress = Math.min(bounceElapsed / bounceDuration, 1);
+          
+          if (bounceProgress < 1) {
+            // 优化回弹效果：先压缩到 0.98，然后弹回 1.00
+            // 使用 easeOutBounce 提供更自然的弹性效果
+            const bounceEased = easeOutBounce(bounceProgress);
+            const bounceScale = 0.98 + (0.02 * bounceEased);
+            
+            // 阴影也跟随回弹效果变化
+            const bounceShadowOpacity = 0.04 * bounceEased;
+            const bounceShadowBlur = 8 + (20 * (1 - bounceEased)); // 回弹时阴影稍微增大
+            
+            el.style.transform = `translate3d(0, 0, 0) scale(${bounceScale})`;
+            el.style.boxShadow = `0 8px ${bounceShadowBlur}px rgba(15, 23, 42, ${bounceShadowOpacity})`;
+            el.style.opacity = '1';
+
+            animationFrameId = requestAnimationFrame(bounceAnimate);
+          } else {
+            // 回弹完成，清理动画
+            cleanup();
+          }
+        };
+
+        animationFrameId = requestAnimationFrame(bounceAnimate);
+      }
+    };
+
+    // 清理函数（包含延迟部署和错误处理）
+    const cleanup = () => {
+      isCancelled = true;
+      
+      // 移除事件监听器
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('scroll', handleScroll);
+      
+      if (animationFrameId !== null) {
+        cancelAnimationFrame(animationFrameId);
+        animationFrameId = null;
+      }
+      
+      // 性能监控：记录动画完成时间
+      const animationEndTime = performance.now();
+      const actualDuration = animationEndTime - animationStartTime;
+      const avgFps = (frameCount / (actualDuration / 1000)).toFixed(1);
+      
+      // 仅在开发模式下输出性能信息
+      if (import.meta.env.DEV && avgFps) {
+        console.log(`[Animation Performance] Card ${cardId}: ${frameCount} frames in ${actualDuration.toFixed(0)}ms, avg FPS: ${avgFps}`);
+      }
+      
+      // 延迟部署：动画完成后正式添加卡片到网格
+      const tempCardState = temporaryCards.value.get(cardId);
+      if (tempCardState && tempCardState.card) {
+        try {
+          // 1. 验证卡片数据有效性
+          if (!tempCardState.targetGridPosition || 
+              typeof tempCardState.targetGridPosition.x !== 'number' || 
+              typeof tempCardState.targetGridPosition.y !== 'number') {
+            console.error('[Animation] Invalid target grid position, skipping deployment');
+            // 清理临时卡片元素
+            if (tempCardState.element && tempCardState.element.parentNode) {
+              tempCardState.element.parentNode.removeChild(tempCardState.element);
+            }
+            temporaryCards.value.delete(cardId);
+            return;
+          }
+          
+          // 2. 创建正式卡片并添加到网格数据结构
+          const finalCard: BentoCardType = {
+            ...tempCardState.card,
+            id: `card-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+            position: tempCardState.targetGridPosition,
+            rowIndex: tempCardState.targetGridPosition.y
+          };
+          
+          grid.value.cards.push(finalCard);
+          
+          // 更新行结构（如果需要）
+          if (grid.value.rows) {
+            const targetRow = grid.value.rows.find(row => row.index === finalCard.rowIndex);
+            if (targetRow) {
+              targetRow.cards.push(finalCard);
+              targetRow.cards.sort((a, b) => a.position.x - b.position.x);
+            } else {
+              // 创建新行
+              grid.value.rows.push({
+                id: `row-${finalCard.rowIndex}`,
+                index: finalCard.rowIndex!,
+                cards: [finalCard]
+              });
+              grid.value.rows.sort((a, b) => a.index - b.index);
+            }
+          }
+          
+          // 3. 标记正式卡片为部署中（用于渐显效果，初始opacity为0）
+          deployingCards.value.add(finalCard.id);
+          
+          // 4. 等待Vue完成DOM更新，确保正式卡片已渲染
+          nextTick(() => {
+            // 5. 让临时卡片渐隐（降低z-index确保不影响正式卡片）
+            if (tempCardState.element) {
+              tempCardState.element.style.transition = 'opacity 0.3s ease-out';
+              tempCardState.element.style.zIndex = '1'; // 降低z-index，让正式卡片在上层
+              tempCardState.element.style.opacity = '0';
+            }
+            
+            // 6. 让正式卡片渐显
+            requestAnimationFrame(() => {
+              const finalCardElement = gridEl.value?.querySelector(`.bento-grid__card[data-id="${finalCard.id}"]`) as HTMLElement | null;
+              if (finalCardElement) {
+                // 确保初始状态是透明的
+                finalCardElement.style.opacity = '0';
+                // 强制重排，确保opacity: 0生效
+                void finalCardElement.offsetHeight;
+                // 添加过渡并渐显
+                finalCardElement.style.transition = 'opacity 0.3s ease-out';
+                finalCardElement.style.opacity = '1';
+              }
+            });
+            
+            // 7. 渐隐完成后移除临时卡片元素并清理状态
+            setTimeout(() => {
+              if (tempCardState.element && tempCardState.element.parentNode) {
+                tempCardState.element.parentNode.removeChild(tempCardState.element);
+              }
+              temporaryCards.value.delete(cardId);
+              deployingCards.value.delete(finalCard.id);
+            }, 300); // 300ms 与渐隐动画时长一致
+          });
+        } catch (error) {
+          console.error('[Animation] Error deploying card after animation:', error);
+          // 确保清理临时卡片元素，即使部署失败
+          if (tempCardState.element && tempCardState.element.parentNode) {
+            tempCardState.element.parentNode.removeChild(tempCardState.element);
+          }
+          temporaryCards.value.delete(cardId);
+        }
+      } else {
+        // 如果没有临时卡片状态，仍然清理动画样式
+        console.warn('[Animation] No temporary card state found for cardId:', cardId);
+      }
+      
+      // 5. 清理动画样式和状态
       el.style.transition = '';
       el.style.transform = '';
       el.style.boxShadow = '';
@@ -1072,7 +1495,16 @@ const handleCardPlacedWithAnimation = (event: CustomEvent) => {
       el.style.pointerEvents = '';
       animSuppressMove.value.delete(cardId);
       animations.value.delete(cardId);
-    }, duration + 10 + 160 + 20);
+    };
+
+    // 启动动画
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!isCancelled) {
+          animationFrameId = requestAnimationFrame(animate);
+        }
+      });
+    });
   }, 10);
 };
 

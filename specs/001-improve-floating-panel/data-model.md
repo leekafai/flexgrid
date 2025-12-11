@@ -141,3 +141,4 @@ Dragging → click other button → endDragFromStorage(false) → card stays in 
 3. **响应式约束**: 所有状态变更必须通过响应式 API（ref/computed）进行
 4. **性能约束**: 拖放操作必须在 50ms 内显示视觉反馈
 
+
